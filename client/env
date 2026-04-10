@@ -1,0 +1,4 @@
+# Frontend API Configuration
+VITE_API_URL=http://localhost:3001
+
+# Note: Backend configuration is in server/.env

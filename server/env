@@ -1,0 +1,10 @@
+# Database Configuration (Railway Public TCP Proxy)
+DB_HOST=autorack.proxy.rlwy.net
+DB_PORT=52808
+DB_USER=root
+DB_PASSWORD=VRcZNIXbTinjXojkweDCgFtpicPlWYvI
+DB_NAME=railway
+
+# Node Environment
+NODE_ENV=development
+CLIENT_URL=http://localhost:5173

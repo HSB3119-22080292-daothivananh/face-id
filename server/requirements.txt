@@ -1,7 +1,22 @@
-fastapi
-uvicorn
-python-multipart
-mysql-connector-python
-face-recognition
-numpy
-python-dotenv
+# --- Core Web & Server ---
+fastapi==0.110.0
+uvicorn==0.29.0
+python-multipart==0.0.9
+# --- Database & Utils ---
+python-dotenv==1.0.1
+mysql-connector-python==8.3.0
+requests==2.31.0
+# --- Xử lý Ảnh cơ bản ---
+opencv-python==4.9.0.80
+Pillow==10.2.0
+numpy==1.26.4
+# --- AI: Face Recognition ---
+insightface==0.7.3
+onnxruntime==1.17.1
+# --- AI: YOLOv7 & VietOCR Dependencies ---
+einops==0.7.0
+PyYAML==6.0.1
+scipy==1.12.0
+pandas==2.2.1
+matplotlib==3.8.3
+tqdm==4.66.2

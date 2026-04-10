@@ -2056,6 +2056,7 @@ export function RegisteredFaces() {
         {/* Render Modal Đăng ký mới */}
         {showRegisterModal && (
           <RegisterModal
+           key="register"
             onClose={() => setShowRegisterModal(false)}
             onSuccess={handleRegisterSuccess}
           />
@@ -2064,6 +2065,7 @@ export function RegisteredFaces() {
         {/* Render Modal Chỉnh Sửa */}
         {personToEdit && (
           <EditModal
+          key="edit"
             person={personToEdit}
             onClose={() => setPersonToEdit(null)}
             onSuccess={handleEditSuccess}
@@ -2072,6 +2074,7 @@ export function RegisteredFaces() {
         
         {/* Render Modal Hỏi Xóa */}
         <ConfirmModal
+        key="confirm"
           isOpen={personToDelete !== null}
           title="Xác nhận xóa"
           message={personToDelete ? `Bạn có chắc chắn muốn xóa nhân sự "${personToDelete.name}" khỏi hệ thống nhận diện? Hành động này không thể hoàn tác.` : ""}
@@ -2083,7 +2086,7 @@ export function RegisteredFaces() {
         {/* Render Toast thông báo */}
         {toast && (
           <ToastNotification
-            key={toast.message + Math.random()} // Ép render lại animation
+              key="toast"
             message={toast.message}
             type={toast.type}
             onClose={() => setToast(null)}

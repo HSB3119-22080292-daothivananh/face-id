@@ -7,10 +7,10 @@ load_dotenv()
 
 db_config = {
     "host": os.getenv("DB_HOST", "localhost"),
-    "port": int(os.getenv("DB_PORT", 3306)), # Thêm port cho đồng bộ với file .env
-    "user": os.getenv("DB_USER", "root"),
-    "password": os.getenv("DB_PASSWORD", "duyem123"), 
-    "database": os.getenv("DB_NAME", "face_recognition"),
+    "port": int(os.getenv("DB_PORT", 3306)), 
+    "user": "root",
+    "password": "vananh123", 
+    "database": "face_recognitionface_embeddings",
     "pool_name": "mypool",
     "pool_size": 5,
 }
