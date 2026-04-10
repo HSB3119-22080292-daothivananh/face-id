@@ -1,7 +1,7 @@
 # Server Port
 PORT=3001
 # Client URL for CORS
-CLIENT_URL=https://face-id-omega.vercel.app/ 
+CLIENT_URL=https://face-id-omega.vercel.app/
 # Database Configuration
 DB_HOST=autorack.proxy.rlwy.net
 DB_PORT=52808
