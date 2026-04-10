@@ -233,7 +233,7 @@ def attempt_load(weights, map_location=None):
     w = weights
     # for w in weights if isinstance(weights, list) else [weights]:
     #     attempt_download(w)
-    ckpt = torch.load(w, map_location=map_location)  # load
+    ckpt = torch.load(w, map_location=map_location, weights_only=False)  # load
     model.append(ckpt['ema' if ckpt.get('ema') else 'model'].float().fuse().eval())  # FP32 model
 
     # Compatibility updates

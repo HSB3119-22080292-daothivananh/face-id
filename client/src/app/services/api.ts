@@ -171,4 +171,19 @@ export const apiClient = {
     if (!response.ok) throw new Error("Reload memory failed");
     return response.json();
   },
+
+  extractOCR: async (file: File, side: "front" | "back") => {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("side", side);
+
+    const res = await fetch("http://localhost:3001/api/face/ocr", {
+      method: "POST",
+      body: formData,
+    });
+    if (!res.ok) throw new Error("Lỗi gọi API OCR");
+    return res.json(); // Trả về { success: true, data: { name, id, dob... } }
+  }
+
+  
 };
