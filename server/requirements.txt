@@ -23,3 +23,8 @@ tqdm==4.66.2
 
 torch --index-url https://download.pytorch.org/whl/cpu
 torchvision --index-url https://download.pytorch.org/whl/cpu
+
+seaborn
+matplotlib
+pandas
+scipy
