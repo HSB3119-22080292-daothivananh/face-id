@@ -28,3 +28,4 @@ seaborn
 matplotlib
 pandas
 scipy
+imutils
