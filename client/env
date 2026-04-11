@@ -1,4 +1,4 @@
 # Frontend API Configuration
-VITE_API_URL=http://localhost:3001
+VITE_API_URL=https://vananhcs-face-id.hf.space
 
 # Note: Backend configuration is in server/.env
