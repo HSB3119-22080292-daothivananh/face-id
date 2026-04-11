@@ -1,5 +1,5 @@
 # Server Port
-PORT=3001
+
 # Client URL for CORS
 CLIENT_URL=https://face-id-omega.vercel.app/
 # Database Configuration

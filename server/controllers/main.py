@@ -1,5 +1,6 @@
 import os
 import sys
+import threading # <-- Đã thêm thư viện threading
 from pathlib import Path
 
 # ─── 1. CẤU HÌNH ĐƯỜNG DẪN TUYỆT ĐỐI (TRÁNH LẠC ĐƯỜNG) ──────────────────────
@@ -48,34 +49,52 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-# ─── KHỞI TẠO AI: YOLOv7 + VietOCR ────────────────────────────────────────────
-logger.info("[Startup] Nạp mô hình VietOCR (VGG-seq2seq)...")
-vocr_config_path = os.path.join(current_dir, 'Vocr', 'config', 'vgg-seq2seq.yml')
-config_vietocr = Cfg_vietocr.load_config_from_file(vocr_config_path)
+# ─── KHỞI TẠO AI CHẠY NGẦM ───────────────────────────────────────────────────
+ocr_predictor = None
+read_info = None
+is_ai_ready = False
 
-config_vietocr['weights'] = os.path.join(current_dir, 'Models', 'seq2seqocr.pth')
-config_vietocr['device']  = 'cpu'  # Đổi thành 'cuda:0' nếu máy có Card rời NVIDIA
-ocr_predictor = Predictor(config_vietocr)
+def load_ai_background():
+    global ocr_predictor, read_info, is_ai_ready
+    try:
+        logger.info("[AI_LOADER] Bắt đầu nạp mô hình AI chạy ngầm (Chống sập Render)...")
+        
+        # Nạp VietOCR
+        vocr_config_path = os.path.join(current_dir, 'Vocr', 'config', 'vgg-seq2seq.yml')
+        config_vietocr = Cfg_vietocr.load_config_from_file(vocr_config_path)
+        config_vietocr['weights'] = os.path.join(current_dir, 'Models', 'seq2seqocr.pth')
+        config_vietocr['device']  = 'cpu'
+        ocr_predictor = Predictor(config_vietocr)
 
-logger.info("[Startup] Nạp mô hình YOLOv7 (Phát hiện vùng thông tin)...")
-get_dictionary = Detect(opt)
-scan_weight = os.path.join(current_dir, 'Models', 'cccdYoloV7.pt')
-imgsz, stride, device, half, model, names = get_dictionary.load_model(scan_weight)
+        # Nạp YOLOv7
+        get_dictionary = Detect(opt)
+        scan_weight = os.path.join(current_dir, 'Models', 'cccdYoloV7.pt')
+        imgsz, stride, device, half, model, names = get_dictionary.load_model(scan_weight)
+        
+        read_info = ReadInfo(imgsz, stride, device, half, model, names, ocr_predictor)
+        
+        is_ai_ready = True
+        logger.info("[AI_LOADER] HOÀN TẤT! Hệ thống YOLO + VietOCR đã sẵn sàng nhận diện.")
+    except Exception as e:
+        logger.error(f"[AI_LOADER] Lỗi khi nạp AI: {e}")
 
-read_info = ReadInfo(imgsz, stride, device, half, model, names, ocr_predictor)
-logger.info("[Startup] Hệ thống YOLO + VietOCR đã sẵn sàng!")
 
-
-# ─── Startup ──────────────────────────────────────────────────────────────────
+# ─── Startup (Vượt qua vòng kiểm duyệt của Render) ────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("[Startup] Khởi tạo cấu trúc Database (nếu chưa có)...")
     init_database()
+    
     logger.info("[Startup] Nạp embedding vào RAM...")
     _load_embeddings_to_ram()
     logger.info(f"[Startup] {face_memory_store.count} khuôn mặt trên RAM")
+
+    # BẬT LUỒNG CHẠY NGẦM: Server mở cổng ngay lập tức, AI từ từ nạp
+    threading.Thread(target=load_ai_background, daemon=True).start()
+    
     yield
     logger.info("[Shutdown] Bye!")
+
 def _load_embeddings_to_ram():
     conn = None
     cursor = None
@@ -103,10 +122,11 @@ def _load_embeddings_to_ram():
                 })
             except Exception as e:
                 logger.warning(f"[Startup] Bỏ qua khuôn mặt lỗi: {e}")
-                face_memory_store.load_all(parsed)
+                
+        face_memory_store.load_all(parsed)
         
     except Exception as e:
-        logger.error(f"[Startup]  Lỗi kết nối DB khi nạp dữ liệu: {e}")
+        logger.error(f"[Startup] Lỗi kết nối DB khi nạp dữ liệu: {e}")
         face_memory_store.load_all([]) 
         
     finally:
@@ -127,12 +147,10 @@ app.add_middleware(
 
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
-
 class PersonUpdate(BaseModel):
     name: str
     role: str
     department: str
-
 
 def save_log_to_db(log_queries: list) -> None:
     if not log_queries:
@@ -153,6 +171,10 @@ def save_log_to_db(log_queries: list) -> None:
 
 @app.post("/api/face/ocr")
 async def extract_ocr_local(file: UploadFile = File(...), side: str = Form(...)):
+    # BẢO VỆ: Chặn request nếu AI chưa nạp xong
+    if not is_ai_ready:
+        return {"success": False, "message": "Hệ thống AI đang khởi động, vui lòng thử lại sau 1-2 phút!"}
+
     temp_path = ""
     try:
         temp_filename = f"temp_cccd_{uuid.uuid4().hex}.jpg"
@@ -177,7 +199,7 @@ async def extract_ocr_local(file: UploadFile = File(...), side: str = Form(...))
                 "expiry_date":      raw.get("date_of_expiry", ""),
             }
 
-        else:  # back — ĐÃ NÂNG CẤP: dùng get_back_info như mặt trước
+        else:  # back
             raw = read_info.get_back_info(temp_path)
             logger.info(f"[OCR] Mặt sau raw: {raw}")
             mapped_data = {
@@ -196,7 +218,7 @@ async def extract_ocr_local(file: UploadFile = File(...), side: str = Form(...))
         logger.error(f"[OCR] Lỗi: {e}", exc_info=True)
         if os.path.exists(temp_path):
             os.remove(temp_path)
-        return {"success": True, "data": {}}
+        return {"success": False, "message": str(e), "data": {}}
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -265,7 +287,6 @@ async def recognize(
         },
     }
 
-
 # ═════════════════════════════════════════════════════════════════════════════
 # ĐĂNG KÝ
 # ═════════════════════════════════════════════════════════════════════════════
@@ -285,32 +306,47 @@ async def register(
     person_id = str(uuid.uuid4())
     new_encodings: list[tuple] = []
     avatar_path = ""
+    saved_files = [] # Lưu danh sách file đã tạo để xóa nếu có lỗi
+    COSINE_THRESHOLD = 0.5 # Bổ sung biến ngưỡng vì thấy bạn nhắc tới trong code
 
     try:
         cccd       = json.loads(cccd_info) if cccd_info else {}
         expiry_val = work_expiry_date or None
+        cccd_number = cccd.get("id_number")
 
-        # ── 1. Lưu ảnh khuôn mặt + tạo embedding ────────────────────────
+        # ── 1. CHECK TRÙNG CCCD ─────────────────────────────────────────────
+        if cccd_number:
+            cursor.execute("SELECT id FROM citizen_ids WHERE id_number = %s", (cccd_number,))
+            if cursor.fetchone():
+                raise Exception("Số CCCD này đã được đăng ký trong hệ thống!")
+
+        # ── 2. XỬ LÝ ẢNH KHUÔN MẶT WEBCAM/UPLOAD ────────────────────────────
+        user_descriptor = None
         for i, img_file in enumerate(images):
             img_bytes  = await img_file.read()
-            saved_path = face_ai_service.save_image(img_bytes, person_id, index=i)
-            if i == 0:
-                avatar_path = saved_path
-
             detections = face_ai_service.extract_faces(img_bytes)
+            
             if len(detections) == 0:
-                raise Exception(f"Không tìm thấy khuôn mặt trong ảnh thứ {i + 1}.")
+                raise Exception(f"Không tìm thấy khuôn mặt trong ảnh mẫu thứ {i + 1}.")
             if len(detections) > 1:
-                raise Exception(f"Ảnh thứ {i + 1} có nhiều hơn 1 khuôn mặt.")
+                raise Exception(f"Ảnh mẫu thứ {i + 1} có nhiều hơn 1 khuôn mặt.")
 
             descriptor = detections[0]["descriptor"]
             emb_id     = str(uuid.uuid4())
-
+            
             if i == 0:
+                user_descriptor = descriptor # Lưu ảnh đầu tiên để so sánh với CCCD
+
+            # Lưu file cứng
+            saved_path = face_ai_service.save_image(img_bytes, person_id, index=i)
+            saved_files.append(saved_path)
+            
+            if i == 0:
+                avatar_path = saved_path
                 cursor.execute(
-                    """INSERT INTO persons
-                         (id, name, role, department, status, img_path, work_expiry_date)
-                       VALUES (%s, %s, %s, %s, 'active', %s, %s)""",
+                    """INSERT INTO persons 
+                          (id, name, role, department, status, img_path, work_expiry_date)
+                        VALUES (%s, %s, %s, %s, 'active', %s, %s)""",
                     (person_id, name, role, department, avatar_path, expiry_val),
                 )
 
@@ -320,23 +356,42 @@ async def register(
             )
             new_encodings.append((person_id, name, role, avatar_path, expiry_val, descriptor))
 
-        # ── 2. Lưu ảnh CCCD + ghi bảng citizen_ids ──────────────────────
+        # ── 3. XỬ LÝ CCCD VÀ SO SÁNH KHUÔN MẶT ──────────────────────────────
         front_path, back_path = "", ""
 
         if cccd_front:
-            fb = await cccd_front.read()
-            if fb:
-                front_path = face_ai_service.save_image(fb, f"cccd_front_{person_id}", index=0)
+            fb_bytes = await cccd_front.read()
+            if fb_bytes:
+                # Trích xuất khuôn mặt từ ảnh mặt trước CCCD
+                cccd_detections = face_ai_service.extract_faces(fb_bytes)
+                if len(cccd_detections) == 0:
+                    raise Exception("Không tìm thấy khuôn mặt trên ảnh mặt trước CCCD.")
+                
+                cccd_descriptor = cccd_detections[0]["descriptor"]
+
+                # So sánh độ tương đồng (Cosine Similarity)
+                q = face_memory_store._norm(np.array(user_descriptor, dtype=np.float32))
+                c = face_memory_store._norm(np.array(cccd_descriptor, dtype=np.float32))
+                score = float(np.dot(q, c))
+
+                # Nếu nhỏ hơn ngưỡng -> Không phải cùng một người
+                if score < COSINE_THRESHOLD:
+                    logger.warning(f"Cảnh báo giả mạo: Score {score} < {COSINE_THRESHOLD}")
+                    raise Exception("Cảnh báo: Khuôn mặt trên thẻ CCCD KHÔNG KHỚP với ảnh chụp trực tiếp!")
+
+                front_path = face_ai_service.save_image(fb_bytes, f"cccd_front_{person_id}", index=0)
+                saved_files.append(front_path)
 
         if cccd_back:
-            bb = await cccd_back.read()
-            if bb:
-                back_path = face_ai_service.save_image(bb, f"cccd_back_{person_id}", index=0)
+            bb_bytes = await cccd_back.read()
+            if bb_bytes:
+                back_path = face_ai_service.save_image(bb_bytes, f"cccd_back_{person_id}", index=0)
+                saved_files.append(back_path)
 
         cursor.execute("""
             INSERT INTO citizen_ids
-              (id, person_id, front_img_path, back_img_path,
-               id_number, full_name, dob, gender, nationality,
+              (id, person_id, front_img_path, back_img_path, 
+               id_number, full_name, dob, gender, nationality, 
                hometown, address, expiry_date, issue_date, special_features)
             VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """, (
@@ -352,7 +407,7 @@ async def register(
 
         conn.commit()
 
-        # ── 3. Cập nhật RAM ngay ─────────────────────────────────────────
+        # ── 4. CẬP NHẬT RAM NGAY LẬP TỨC ─────────────────────────────────
         for pid, pname, prole, pimg, pexpiry, enc in new_encodings:
             face_memory_store.add(pid, pname, prole, pimg, enc, work_expiry_date=pexpiry)
 
@@ -366,16 +421,16 @@ async def register(
 
     except Exception as e:
         conn.rollback()
-        logger.error(f"[Register]  {e}")
-        for i in range(len(images)):
-            p = Path(UPLOAD_DIR) / f"{person_id}_{i}.jpg"
+        logger.error(f"[Register Lỗi]  {e}")
+        # Rollback: Xóa các file ảnh vừa tạo nếu có lỗi xảy ra
+        for path in saved_files:
+            p = Path(path)
             if p.exists():
                 p.unlink()
         return JSONResponse(status_code=400, content={"success": False, "error": str(e)})
     finally:
         cursor.close()
         conn.close()
-
 
 # ═════════════════════════════════════════════════════════════════════════════
 # DANH SÁCH NGƯỜI DÙNG
@@ -412,7 +467,7 @@ async def get_persons():
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# CẬP NHẬT & XÓA & LOGS & THỐNG KÊ (Giữ nguyên)
+# CẬP NHẬT & XÓA & LOGS & THỐNG KÊ
 # ═════════════════════════════════════════════════════════════════════════════
 @app.put("/api/face/persons/{id}")
 async def update_person(id: str, person_data: PersonUpdate):
