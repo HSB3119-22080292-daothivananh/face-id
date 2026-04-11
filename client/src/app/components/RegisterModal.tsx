@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence } from "framer-motion"; // Đã sửa 'motion/react' thành chuẩn 'framer-motion'
 import {
   X, Upload, Shield, Camera, CreditCard,
   ChevronRight, Check, AlertTriangle, Info, RefreshCw, QrCode
@@ -35,14 +35,14 @@ const CCCD_FIELDS: Array<{
 }> = [
   { key: "full_name",        label: "Họ và tên *",         placeholder: "NGUYỄN VĂN A",                    full: true },
   { key: "id_number",        label: "Số CCCD / CMND",      placeholder: "0XX XXX XXX XXX" },
-  { key: "dob",              label: "Ngày sinh",            placeholder: "01/01/1990" },
-  { key: "gender",           label: "Giới tính",            placeholder: "Nam / Nữ" },
-  { key: "nationality",      label: "Quốc tịch",            placeholder: "Việt Nam" },
-  { key: "hometown",         label: "Quê quán",             placeholder: "Tỉnh / Thành phố...",             full: true },
-  { key: "address",          label: "Nơi thường trú",       placeholder: "Số nhà, đường, phường, quận, TP", full: true },
-  { key: "expiry_date",      label: "Có giá trị đến",       placeholder: "01/01/2030" },
-  { key: "issue_date",       label: "Ngày cấp",             placeholder: "01/01/2020" },
-  { key: "issued_by",        label: "Nơi cấp",              placeholder: "Cục Cảnh sát QLHC...",            full: true },
+  { key: "dob",              label: "Ngày sinh",           placeholder: "01/01/1990" },
+  { key: "gender",           label: "Giới tính",           placeholder: "Nam / Nữ" },
+  { key: "nationality",      label: "Quốc tịch",           placeholder: "Việt Nam" },
+  { key: "hometown",         label: "Quê quán",            placeholder: "Tỉnh / Thành phố...",             full: true },
+  { key: "address",          label: "Nơi thường trú",      placeholder: "Số nhà, đường, phường, quận, TP", full: true },
+  { key: "expiry_date",      label: "Có giá trị đến",      placeholder: "01/01/2030" },
+  { key: "issue_date",       label: "Ngày cấp",            placeholder: "01/01/2020" },
+  { key: "issued_by",        label: "Nơi cấp",             placeholder: "Cục Cảnh sát QLHC...",            full: true },
   { key: "special_features", label: "Đặc điểm nhận dạng",  placeholder: "Sẹo, nốt ruồi...",                full: true },
 ];
 
@@ -133,7 +133,16 @@ function StepCCCD({
   const backRef = useRef<HTMLInputElement>(null);
 
   // ── Mặt trước ──────────────────────────────────────────────────────────────
-  const handleFront = async (file: File) => {
+  const handleFront = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Kiểm tra định dạng (Chống lỗi HEIC)
+    if (!file.type.match(/^image\/(jpeg|png|webp|jpg)$/i)) {
+      setFrontStatus("fail");
+      setFrontMsg("Chỉ hỗ trợ JPG, PNG, WEBP. Nếu dùng iPhone, hãy chuyển sang JPG.");
+      return;
+    }
+
     setFrontFile(file);
     setFrontImg(URL.createObjectURL(file));
     setFrontScanning(true);
@@ -155,11 +164,21 @@ function StepCCCD({
       setFrontMsg("Lỗi kết nối AI.");
     } finally {
       setFrontScanning(false);
+      e.target.value = ""; // Reset để chọn lại cùng ảnh
     }
   };
 
   // ── Mặt sau ────────────────────────────────────────────────────────────────
-  const handleBack = async (file: File) => {
+  const handleBack = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Kiểm tra định dạng (Chống lỗi HEIC)
+    if (!file.type.match(/^image\/(jpeg|png|webp|jpg)$/i)) {
+      setBackStatus("fail");
+      setBackMsg("Chỉ hỗ trợ JPG, PNG, WEBP. Nếu dùng iPhone, hãy chuyển sang JPG.");
+      return;
+    }
+
     setBackFile(file);
     setBackImg(URL.createObjectURL(file));
     setBackScanning(true);
@@ -195,6 +214,7 @@ function StepCCCD({
       setBackMsg("Lỗi khi quét mặt sau.");
     } finally {
       setBackScanning(false);
+      e.target.value = ""; // Reset để chọn lại cùng ảnh
     }
   };
 
@@ -262,9 +282,10 @@ function StepCCCD({
               transition: "all 0.3s", ...getBoxStyle(frontStatus, !!frontImg),
             }}
           >
+            {/* VÁ LỖI CỐT LÕI: Ép chuẩn file ảnh, chặn click đúp */}
             <input
-              ref={frontRef} type="file" accept="image/*" style={{ display: "none" }}
-              onChange={(e) => e.target.files?.[0] && handleFront(e.target.files[0])}
+              ref={frontRef} type="file" accept="image/jpeg, image/png, image/webp" style={{ display: "none" }}
+              onChange={handleFront} onClick={(e) => e.stopPropagation()}
             />
             {frontImg ? (
               <>
@@ -304,9 +325,10 @@ function StepCCCD({
               transition: "all 0.3s", ...getBoxStyle(backStatus, !!backImg),
             }}
           >
+            {/* VÁ LỖI CỐT LÕI: Ép chuẩn file ảnh, chặn click đúp */}
             <input
-              ref={backRef} type="file" accept="image/*" style={{ display: "none" }}
-              onChange={(e) => e.target.files?.[0] && handleBack(e.target.files[0])}
+              ref={backRef} type="file" accept="image/jpeg, image/png, image/webp" style={{ display: "none" }}
+              onChange={handleBack} onClick={(e) => e.stopPropagation()}
             />
             {backImg ? (
               <>
@@ -414,7 +436,6 @@ function StepFace({
   const [camActive, setCamActive] = useState(false);
   const [camError, setCamError] = useState("");
 
-  // Dọn dẹp stream khi unmount
   useEffect(() => () => { streamRef.current?.getTracks().forEach((t) => t.stop()); }, []);
 
   const startWebcam = async () => {
@@ -458,15 +479,16 @@ function StepFace({
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const fs = Array.from(e.target.files || [])
-      .filter((f) => f.type.startsWith("image/"))
+      // VÁ LỖI CỐT LÕI: Lọc sạch file rác/HEIC ngay lập tức
+      .filter((f) => f.type.match(/^image\/(jpeg|png|webp|jpg)$/i))
       .slice(0, 5 - files.length);
+      
     setFiles((p) => [...p, ...fs]);
     fs.forEach((f) => {
       const r = new FileReader();
       r.onload = (ev) => setPreviews((p) => [...p, ev.target?.result as string]);
       r.readAsDataURL(f);
     });
-    // Reset input để chọn lại cùng file nếu cần
     e.target.value = "";
   };
 
@@ -475,7 +497,6 @@ function StepFace({
     setPreviews((p) => p.filter((_, j) => j !== i));
   };
 
-  // ── Màn hình chọn phương thức ──────────────────────────────────────────────
   if (mode === "choose") {
     return (
       <div>
@@ -518,7 +539,6 @@ function StepFace({
     );
   }
 
-  // ── Webcam / Upload ────────────────────────────────────────────────────────
   return (
     <div>
       <div
@@ -550,7 +570,6 @@ function StepFace({
               </div>
             ) : (
               <>
-                {/* Overlay góc camera */}
                 {[
                   { top: 8, left: 8, borderTop: "2px solid #00d4ff", borderLeft: "2px solid #00d4ff" },
                   { top: 8, right: 8, borderTop: "2px solid #00d4ff", borderRight: "2px solid #00d4ff" },
@@ -587,7 +606,16 @@ function StepFace({
             onClick={() => fileRef.current?.click()}
             style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", gap: 8 }}
           >
-            <input ref={fileRef} type="file" multiple accept="image/*" onChange={handleUpload} style={{ display: "none" }} />
+            {/* VÁ LỖI CỐT LÕI: Ép chuẩn file ảnh, chặn click đúp */}
+            <input 
+              ref={fileRef} 
+              type="file" 
+              multiple 
+              accept="image/jpeg, image/png, image/webp" 
+              onChange={handleUpload} 
+              onClick={(e) => e.stopPropagation()} 
+              style={{ display: "none" }} 
+            />
             <Upload size={32} color="#8b5cf6" />
             <div style={{ color: "#e2e8f0", fontSize: "14px" }}>Chọn ảnh khuôn mặt ({files.length}/5)</div>
             <div style={{ fontSize: "11px", color: "#4a6fa5" }}>Hỗ trợ JPG, PNG, WEBP</div>
@@ -595,7 +623,6 @@ function StepFace({
         )}
       </div>
 
-      {/* Preview ảnh đã chọn */}
       {previews.length > 0 && (
         <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
           {previews.map((src, i) => (
@@ -664,9 +691,9 @@ function StepInfo({
   const [expiry, setExpiry] = useState("");
 
   const fields = [
-    { label: "Họ và tên *",                               value: name,   setter: setName,   placeholder: "NGUYỄN VĂN A",       type: "text",   required: true },
-    { label: "Chức vụ",                                   value: role,   setter: setRole,   placeholder: "Kỹ sư, Quản lý...",  type: "text",   required: false },
-    { label: "Phòng ban",                                 value: dept,   setter: setDept,   placeholder: "Kỹ thuật, Nhân sự...",type: "text",   required: false },
+    { label: "Họ và tên *",                       value: name,   setter: setName,   placeholder: "NGUYỄN VĂN A",       type: "text",   required: true },
+    { label: "Chức vụ",                           value: role,   setter: setRole,   placeholder: "Kỹ sư, Quản lý...",  type: "text",   required: false },
+    { label: "Phòng ban",                         value: dept,   setter: setDept,   placeholder: "Kỹ thuật, Nhân sự...",type: "text",   required: false },
     { label: "Hết hạn làm việc (để trống nếu vĩnh viễn)", value: expiry, setter: setExpiry, placeholder: "",                    type: "date",   required: false },
   ];
 
@@ -793,7 +820,7 @@ export function RegisterModal({ onClose, onSuccess }: Props) {
 
   const stepLabels = ["", "Thông tin CCCD", "Ảnh khuôn mặt", "Thông tin công việc", "Đang hoàn tất"];
 
-  const handleSubmit = async (info: { name: string; role: string; dept: string; expiry: string }) => {
+  const handleSubmit = async (info: { name: string; role: string; dept: string; expiry: string }) => {    
     try {
       setError("");
       setSubmitting(true);
@@ -813,7 +840,7 @@ export function RegisterModal({ onClose, onSuccess }: Props) {
       onSuccess();
       onClose();
     } catch (err: any) {
-      const msg = err?.response?.data?.detail || err?.message || "Đăng ký thất bại, vui lòng thử lại.";
+      const msg = err?.response?.data?.error || err?.response?.data?.detail || err?.message || "Đăng ký thất bại, vui lòng kiểm tra lại.";
       setError(msg);
       setStep(3);
       setSubmitting(false);
