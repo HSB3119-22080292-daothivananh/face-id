@@ -1,5 +1,5 @@
 const API_URL =
-  ((import.meta as any).env.VITE_API_URL as string) || "http://localhost:3001";
+  ((import.meta as any).env.VITE_API_URL as string) || "https://vananhcs-face-id.hf.space";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface RecognitionFace {
