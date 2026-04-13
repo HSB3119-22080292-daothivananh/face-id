@@ -5,7 +5,7 @@ const API_URL =
 export interface RecognitionFace {
   id: string | null;
   name: string;
-  status: "success" | "unknown";
+  status: "success" | "unknown" | "expired"; // Đã thêm 'expired' cho đồng bộ
   confidence: number;
   bbox: { x: number; y: number; width: number; height: number };
 }
@@ -55,7 +55,7 @@ export interface MemoryStatus {
 export const apiClient = {
   /**
    * 1. Nhận diện khuôn mặt
-   *    Backend chỉ dùng RAM → phản hồi rất nhanh
+   * Backend chỉ dùng RAM → phản hồi rất nhanh
    */
   async recognize(imageData: Blob): Promise<RecognitionResponse> {
     const formData = new FormData();
@@ -71,7 +71,7 @@ export const apiClient = {
 
   /**
    * 2. Đăng ký khuôn mặt mới
-   *    Backend: lưu DB + cập nhật RAM ngay → bật cam là nhận ra liền
+   * Backend: lưu DB + cập nhật RAM ngay → bật cam là nhận ra liền
    */
   async registerFace(data: FormData): Promise<{ success: boolean; message: string; ramCount?: number }> {
     const response = await fetch(`${API_URL}/api/face/register`, {
@@ -97,7 +97,7 @@ export const apiClient = {
 
   /**
    * 4. Cập nhật thông tin người dùng
-   *    Backend: ghi DB + đồng bộ tên trên RAM ngay
+   * Backend: ghi DB + đồng bộ tên trên RAM ngay
    */
   async updatePerson(
     personId: string,
@@ -117,7 +117,7 @@ export const apiClient = {
 
   /**
    * 5. Xóa người dùng
-   *    Backend: xóa DB + xóa khỏi RAM ngay → cam không nhận ra nữa
+   * Backend: xóa DB + xóa khỏi RAM ngay → cam không nhận ra nữa
    */
   async deletePerson(personId: string): Promise<void> {
     const response = await fetch(`${API_URL}/api/face/persons/${personId}`, {
@@ -151,7 +151,7 @@ export const apiClient = {
 
   /**
    * 8. Trạng thái RAM (debug / dashboard)
-   *    Hiển thị số khuôn mặt đang trên RAM, sẵn sàng nhận diện
+   * Hiển thị số khuôn mặt đang trên RAM, sẵn sàng nhận diện
    */
   async getMemoryStatus(): Promise<MemoryStatus> {
     const response = await fetch(`${API_URL}/api/face/memory-status`);
@@ -162,7 +162,7 @@ export const apiClient = {
 
   /**
    * 9. Reload RAM thủ công
-   *    Dùng khi admin can thiệp DB trực tiếp và cần sync lại
+   * Dùng khi admin can thiệp DB trực tiếp và cần sync lại
    */
   async reloadMemory(): Promise<{ ramCount: number; message: string }> {
     const response = await fetch(`${API_URL}/api/face/reload-memory`, {
@@ -172,18 +172,21 @@ export const apiClient = {
     return response.json();
   },
 
+  /**
+   * 10. OCR (Đọc thẻ CCCD)
+   * ĐÃ SỬA LỖI DÙNG LOCALHOST
+   */
   extractOCR: async (file: File, side: "front" | "back") => {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("side", side);
 
-    const res = await fetch("http://localhost:3001/api/face/ocr", {
+    // VÁ LỖI CỐT LÕI: Sử dụng API_URL thay vì localhost
+    const res = await fetch(`${API_URL}/api/face/ocr`, {
       method: "POST",
       body: formData,
     });
     if (!res.ok) throw new Error("Lỗi gọi API OCR");
-    return res.json(); // Trả về { success: true, data: { name, id, dob... } }
+    return res.json(); 
   }
-
-  
 };
