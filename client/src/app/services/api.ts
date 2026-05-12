@@ -1,5 +1,5 @@
 const API_URL =
-  ((import.meta as any).env.VITE_API_URL as string) || "localhost:3001"; // Đảm bảo có giá trị mặc định
+  ((import.meta as any).env.VITE_API_URL as string) || "http://localhost:3001"; // Đảm bảo có giá trị mặc định
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface RecognitionFace {
