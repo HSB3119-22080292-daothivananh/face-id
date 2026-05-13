@@ -4,11 +4,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 db_config = {
-    "host": os.getenv("DB_HOST", "autorack.proxy.rlwy.net"),
-    "port": int(os.getenv("DB_PORT", 52808)),
-    "user": os.getenv("DB_USER", "root"),
-    "password": os.getenv("DB_PASSWORD", "VRcZNIXbTinjXojkweDCgFtpicPlWYvI"),
-    "database": os.getenv("DB_NAME", "railway"),
+    "host": os.getenv("DB_HOST", "gateway01.ap-northeast-1.prod.aws.tidbcloud.com"),
+    "port": int(os.getenv("DB_PORT", 4000)),
+    "user": os.getenv("DB_USER", "2baveu7Xa8Rif24.root"),
+    "password": os.getenv("DB_PASSWORD", "Ao2uet4hvdyZEmAx"),
+    "database": os.getenv("DB_NAME", "test"),
     "pool_name": "mypool",
     "pool_size": 5,
     "ssl_disabled": False

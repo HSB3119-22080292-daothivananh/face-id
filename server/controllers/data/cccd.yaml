@@ -1,0 +1,5 @@
+path: D:/ĐH/KTPM/cccd_recognition_v2/dataset
+train: images/train
+val: images/val
+nc: 10
+names: ['avatar', 'id', 'name', 'dob', 'sex', 'nationality', 'hometown', 'address1', 'address2', 'doe']
