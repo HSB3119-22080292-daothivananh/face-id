@@ -4,7 +4,6 @@ import { Dashboard } from "./components/Dashboard";
 import { LiveRecognition } from "./components/LiveRecognition";
 import { RegisteredFaces } from "./components/RegisteredFaces";
 import { ActivityLog } from "./components/ActivityLog";
-import { Settings } from "./components/Settings";
 
 export const router = createBrowserRouter([
   {
@@ -15,7 +14,6 @@ export const router = createBrowserRouter([
       { path: "live", Component: LiveRecognition },
       { path: "faces", Component: RegisteredFaces },
       { path: "activity", Component: ActivityLog },
-      { path: "settings", Component: Settings },
     ],
   },
 ]);

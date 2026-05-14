@@ -1,5 +1,5 @@
 const API_URL =
-  ((import.meta as any).env.VITE_API_URL as string) || "http://localhost:3001"; // Đảm bảo có giá trị mặc định
+  ((import.meta as any).env.VITE_API_URL as string) || "https://vananhcs-face-id.hf.space"; // Đảm bảo có giá trị mặc định
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface RecognitionFace {
@@ -27,10 +27,33 @@ export interface Person {
   role: string;
   department: string;
   status: "active" | "inactive";
+  work_expiry_date: string | null;
+  img_url: string | null;
+  img_path: string | null;
+  registered_at: string | null;
+  updated_at: string | null;
   registered: string | null;
   img: string | null;
   embeddings: number;
   recognitions: number;
+  citizen_id_record_id: string | null;
+  front_img_path: string | null;
+  back_img_path: string | null;
+  cccd_front_img: string | null;
+  cccd_back_img: string | null;
+  id_number: string | null;
+  full_name: string | null;
+  dob: string | null;
+  gender: string | null;
+  nationality: string | null;
+  hometown: string | null;
+  address: string | null;
+  expiry_date: string | null;
+  issue_date: string | null;
+  special_features: string | null;
+  citizen_created_at: string | null;
+  citizen_updated_at: string | null;
+  is_expired: boolean;
 }
 
 export interface ActivityLogEntry {
@@ -140,13 +163,23 @@ export const apiClient = {
    * 7. Thống kê
    */
   async getStatistics(): Promise<{
-    hourlyData: Array<{ time: string; nhận_diện: number; từ_chối: number; lạ: number }>;
+    hourlyData: Array<{ time: string; recognized: number; denied: number; unknown: number }>;
     weeklyData: Array<{ day: string; value: number }>;
   }> {
     const response = await fetch(`${API_URL}/api/face/statistics`);
     if (!response.ok) throw new Error("Fetch stats failed");
     const result = await response.json();
-    return result.data;
+    const hourlyData = (result.data?.hourlyData ?? []).map((item: any) => ({
+      time: item.time,
+      recognized: item["nhận_diện"] ?? item["nháº­n_diá»‡n"] ?? 0,
+      denied: item["từ_chối"] ?? item["tá»«_chá»‘i"] ?? 0,
+      unknown: item["lạ"] ?? item["láº¡"] ?? 0,
+    }));
+
+    return {
+      hourlyData,
+      weeklyData: result.data?.weeklyData ?? [],
+    };
   },
 
   /**

@@ -1,672 +1,544 @@
-import { useState, useEffect } from "react";
-import { motion } from "motion/react";
-import {
-  Users,
-  Camera,
-  CheckCircle,
-  AlertTriangle,
-  TrendingUp,
-  Eye,
-  Clock,
-  Cpu,
-  Activity,
-  ArrowUpRight,
-  ArrowDownRight,
-} from "lucide-react";
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-} from "recharts";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { ImageWithFallback } from "./figma/ImageWithFallback";
-import { apiClient } from "../services/api";
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  ArrowRight,
+  CalendarClock,
+  Database,
+  ScanFace,
+  ShieldAlert,
+  Users,
+} from "lucide-react";
+import { motion } from "motion/react";
+import { apiClient, type ActivityLogEntry, type MemoryStatus, type Person } from "../services/api";
 
-interface RecognitionEntry {
-  time: string;
-  nhận_diện: number;
-  từ_chối: number;
-  lạ: number;
+interface StatisticsPayload {
+  hourlyData: Array<{ time: string; recognized: number; denied: number; unknown: number }>;
+  weeklyData: Array<{ day: string; value: number }>;
 }
 
-interface WeeklyEntry {
-  day: string;
-  value: number;
-}
-
-function StatCard({
-  icon: Icon,
-  label,
+function DashboardCard({
+  title,
   value,
-  sub,
-  trend,
-  color,
-  delay = 0,
+  detail,
+  accent,
+  icon: Icon,
 }: {
-  icon: any;
-  label: string;
+  title: string;
   value: string;
-  sub: string;
-  trend: number;
-  color: string;
-  delay?: number;
+  detail: string;
+  accent: string;
+  icon: any;
 }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay }}
+    <div
       style={{
-        background: "rgba(255,255,255,0.02)",
-        border: `1px solid ${color}22`,
-        borderRadius: "16px",
-        padding: "20px",
-        position: "relative",
-        overflow: "hidden",
+        borderRadius: 24,
+        padding: 20,
+        background: "var(--app-surface)",
+        border: "1px solid var(--app-border)",
+        boxShadow: "var(--app-shadow)",
       }}
     >
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          right: 0,
-          width: 120,
-          height: 120,
-          background: `radial-gradient(circle, ${color}10 0%, transparent 70%)`,
-          transform: "translate(30%, -30%)",
-        }}
-      />
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
         <div
           style={{
-            width: 44,
-            height: 44,
-            borderRadius: "12px",
-            background: `${color}15`,
-            border: `1px solid ${color}30`,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            width: 46,
+            height: 46,
+            borderRadius: 16,
+            display: "grid",
+            placeItems: "center",
+            background: `${accent}20`,
+            border: `1px solid ${accent}28`,
           }}
         >
-          <Icon size={20} color={color} />
+          <Icon size={20} color={accent} />
         </div>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 4,
-            padding: "4px 8px",
-            borderRadius: "20px",
-            background: trend >= 0 ? "rgba(0,255,136,0.1)" : "rgba(255,45,85,0.1)",
-            border: `1px solid ${trend >= 0 ? "rgba(0,255,136,0.3)" : "rgba(255,45,85,0.3)"}`,
-          }}
-        >
-          {trend >= 0 ? (
-            <ArrowUpRight size={12} color="#00ff88" />
-          ) : (
-            <ArrowDownRight size={12} color="#ff2d55" />
-          )}
-          <span
-            style={{
-              fontSize: "11px",
-              color: trend >= 0 ? "#00ff88" : "#ff2d55",
-              fontFamily: "'JetBrains Mono', monospace",
-            }}
-          >
-            {Math.abs(trend)}%
-          </span>
+        <div style={{ minWidth: 0, textAlign: "right" }}>
+          <div style={{ fontSize: 13, color: "var(--app-muted)" }}>{title}</div>
+          <div style={{ fontSize: 30, fontWeight: 700, marginTop: 10 }}>{value}</div>
         </div>
       </div>
-      <div style={{ marginTop: "16px" }}>
-        <div
-          style={{
-            fontSize: "28px",
-            fontWeight: 700,
-            color,
-            fontFamily: "'Orbitron', monospace",
-            letterSpacing: "1px",
-          }}
-        >
-          {value}
-        </div>
-        <div style={{ fontSize: "13px", color: "#7a95b8", marginTop: 4 }}>{label}</div>
-        <div style={{ fontSize: "11px", color: "#4a6fa5", marginTop: 2 }}>{sub}</div>
-      </div>
-    </motion.div>
+      <div style={{ marginTop: 14, fontSize: 13, color: "var(--app-muted)" }}>{detail}</div>
+    </div>
   );
 }
 
 export function Dashboard() {
   const navigate = useNavigate();
-  const [liveCount, setLiveCount] = useState(0);
-  const [recognitionData, setRecognitionData] = useState<RecognitionEntry[]>([]);
-  const [weeklyData, setWeeklyData] = useState<WeeklyEntry[]>([]);
-  const [recentEvents, setRecentEvents] = useState<any[]>([]);
-  const [registeredFacesCount, setRegisteredFacesCount] = useState(0);
-  const [todayRecognitions, setTodayRecognitions] = useState(0);
-  const [unknownCount, setUnknownCount] = useState(0);
+  const [persons, setPersons] = useState<Person[]>([]);
+  const [logs, setLogs] = useState<ActivityLogEntry[]>([]);
+  const [statistics, setStatistics] = useState<StatisticsPayload>({ hourlyData: [], weeklyData: [] });
+  const [memory, setMemory] = useState<MemoryStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const cameras = [
-    { id: 1, name: "Cổng chính", status: "online", fps: 30, detections: 245, resolution: "1080p" },
-    { id: 2, name: "Sảnh A", status: "online", fps: 25, detections: 189, resolution: "720p" },
-    { id: 3, name: "Cổng phụ", status: "online", fps: 30, detections: 98, resolution: "1080p" },
-    { id: 4, name: "Phòng lab", status: "offline", fps: 0, detections: 0, resolution: "4K" },
-  ];
-
-  // Load real data from API
   useEffect(() => {
+    let mounted = true;
+
     const loadData = async () => {
       try {
-        // Fetch activity logs
-        const logs = await apiClient.getActivityLog();
-        
-        // Set recent events (last 5)
-        const recentLogsFormatted = logs.slice(0, 5).map((log, idx) => ({
-          id: idx + 1,
-          name: log.name,
-          time: log.time,
-          status: log.status,
-          confidence: log.confidence,
-          camera: log.camera,
-          avatar: log.img,
-        }));
-        setRecentEvents(recentLogsFormatted);
+        setLoading(true);
+        setError("");
 
-        // Calculate today's statistics
-        const todayLogs = logs.filter((log) =>
-          log.date === new Date().toLocaleDateString("vi-VN", {
-            day: "2-digit",
-            month: "2-digit",
-            year: "numeric",
-          })
-        );
-        
-        const successToday = todayLogs.filter((l) => l.status === "success").length;
-        const unknownToday = todayLogs.filter((l) => l.status === "unknown").length;
-        
-        setTodayRecognitions(successToday);
-        setUnknownCount(unknownToday);
+        const [personsData, logsData, statsData, memoryData] = await Promise.all([
+          apiClient.getPersons(),
+          apiClient.getActivityLog(),
+          apiClient.getStatistics(),
+          apiClient.getMemoryStatus(),
+        ]);
 
-        // Fetch statistics
-        const stats = await apiClient.getStatistics();
-        setRecognitionData(stats.hourlyData);
-        setWeeklyData(stats.weeklyData);
+        if (!mounted) {
+          return;
+        }
 
-        // Fetch registered faces
-        const persons = await apiClient.getPersons();
-        setRegisteredFacesCount(persons.length);
-      } catch (error) {
-        console.error("Failed to load dashboard data:", error);
-        // If API fails, use empty/default data
-        setRecognitionData([]);
-        setWeeklyData([]);
-        setRecentEvents([]);
+        setPersons(personsData);
+        setLogs(logsData);
+        setStatistics(statsData);
+        setMemory(memoryData);
+      } catch (err) {
+        if (!mounted) {
+          return;
+        }
+
+        setError(err instanceof Error ? err.message : "Không thể tải dữ liệu dashboard");
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
     loadData();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div
-          style={{
-            background: "#0d1520",
-            border: "1px solid rgba(0,212,255,0.2)",
-            borderRadius: "10px",
-            padding: "10px 14px",
-          }}
-        >
-          <div style={{ fontSize: "11px", color: "#4a6fa5", marginBottom: 6 }}>{label}</div>
-          {payload.map((p: any) => (
-            <div key={p.dataKey} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
-              <div style={{ width: 8, height: 8, borderRadius: "50%", background: p.color }} />
-              <span style={{ fontSize: "12px", color: "#e2e8f0" }}>{p.value}</span>
-            </div>
-          ))}
-        </div>
-      );
+  const todayKey = new Date().toLocaleDateString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+
+  const activePersons = persons.filter((person) => person.status === "active").length;
+  const expiredPersons = persons.filter((person) => person.is_expired).length;
+  const totalRecognitions = logs.filter((log) => log.status === "success").length;
+  const todayRecognitions = logs.filter((log) => log.status === "success" && log.date === todayKey).length;
+  const unknownToday = logs.filter((log) => log.status === "unknown" && log.date === todayKey).length;
+  const recentLogs = logs.slice(0, 6);
+  const flaggedProfiles = persons.filter((person) => person.is_expired || person.status === "inactive").slice(0, 5);
+
+  const tooltip = ({ active, payload, label }: any) => {
+    if (!active || !payload?.length) {
+      return null;
     }
-    return null;
-  };
 
-  return (
-    <div style={{ padding: "24px", height: "100%", overflowY: "auto" }}>
-      {/* Header */}
-      <div style={{ marginBottom: "24px" }}>
-        <motion.h1
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          style={{
-            fontSize: "22px",
-            fontWeight: 700,
-            color: "#e2e8f0",
-            fontFamily: "'Orbitron', monospace",
-            letterSpacing: "1px",
-          }}
-        >
-          TỔNG QUAN HỆ THỐNG
-        </motion.h1>
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.1 }}
-          style={{ fontSize: "13px", color: "#4a6fa5", marginTop: 4 }}
-        >
-          Giám sát real-time · Cập nhật lần cuối: vừa xong
-        </motion.p>
-      </div>
-
-      {/* Stat cards */}
+    return (
       <div
         style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-          gap: "16px",
-          marginBottom: "24px",
+          borderRadius: 16,
+          padding: 12,
+          background: "var(--app-surface-overlay)",
+          border: "1px solid var(--app-border)",
+          boxShadow: "var(--app-shadow)",
         }}
       >
-        <StatCard
-          icon={Users}
-          label="Khuôn Mặt Đã Đăng Ký"
-          value={String(registeredFacesCount)}
-          sub={`+${Math.max(0, registeredFacesCount - Math.floor(registeredFacesCount * 0.95))} trong tuần này`}
-          trend={4.7}
-          color="#00d4ff"
-          delay={0.1}
-        />
-        <StatCard
-          icon={Eye}
-          label="Nhận Diện Hôm Nay"
-          value={String(todayRecognitions)}
-          sub="Cập nhật liên tục"
-          trend={12.3}
-          color="#00ff88"
-          delay={0.15}
-        />
-        <StatCard
-          icon={CheckCircle}
-          label="Độ Chính Xác"
-          value="97.4%"
-          sub="Model FaceNet v2.0"
-          trend={1.2}
-          color="#8b5cf6"
-          delay={0.2}
-        />
-        <StatCard
-          icon={AlertTriangle}
-          label="Phát Hiện Lạ"
-          value={String(unknownCount)}
-          sub="Hôm nay · Cần xem xét"
-          trend={-8.5}
-          color="#fbbf24"
-          delay={0.25}
-        />
+        <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 8 }}>{label}</div>
+        {payload.map((entry: any) => (
+          <div key={entry.dataKey} style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+            <div style={{ width: 8, height: 8, borderRadius: 999, background: entry.color }} />
+            <div style={{ fontSize: 13 }}>{entry.value}</div>
+          </div>
+        ))}
       </div>
+    );
+  };
 
-      {/* Charts row */}
-      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "16px", marginBottom: "24px" }}>
-        {/* Area chart */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
+  if (loading) {
+    return (
+      <div style={{ padding: 28 }}>
+        <div
           style={{
-            background: "rgba(255,255,255,0.02)",
-            border: "1px solid rgba(0,212,255,0.1)",
-            borderRadius: "16px",
-            padding: "20px",
+            borderRadius: 28,
+            padding: 32,
+            background: "var(--app-surface)",
+            border: "1px solid var(--app-border)",
+            color: "var(--app-muted)",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          Đang tải dữ liệu dashboard...
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: 28, display: "grid", gap: 20 }}>
+      <motion.section
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        style={{
+          borderRadius: 28,
+          padding: 24,
+          border: "1px solid var(--app-border)",
+          background: "linear-gradient(135deg, #ffffff, var(--app-bg-subtle))",
+          boxShadow: "var(--app-shadow)",
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 16,
+          flexWrap: "wrap",
+        }}
+      >
+        <div style={{ maxWidth: 620 }}>
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "8px 12px",
+              borderRadius: 999,
+              background: "rgba(125,211,252,0.08)",
+              border: "1px solid rgba(125,211,252,0.16)",
+              color: "var(--app-accent)",
+              fontSize: 12,
+              marginBottom: 16,
+            }}
+          >
+            <Database size={14} />
+            Dữ liệu lấy trực tiếp từ API người dùng, log và thống kê
+          </div>
+          <div style={{ fontSize: 30, fontWeight: 700, lineHeight: 1.2 }}>Bỏ số liệu giả, giữ lại phần hữu ích để vận hành</div>
+          <div style={{ marginTop: 10, color: "var(--app-muted)", fontSize: 14, lineHeight: 1.7 }}>
+            Dashboard hiện chỉ giữ các chỉ số lấy được từ backend: hồ sơ đăng ký, lượt nhận diện, trạng thái RAM và những hồ sơ cần kiểm tra.
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-start" }}>
+          <button
+            onClick={() => navigate("/faces")}
+            style={{
+              padding: "12px 16px",
+              borderRadius: 18,
+              border: "1px solid rgba(125,211,252,0.22)",
+              background: "rgba(125,211,252,0.12)",
+              color: "var(--app-text)",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            Xem hồ sơ người dùng
+            <ArrowRight size={16} />
+          </button>
+          <button
+            onClick={() => navigate("/live")}
+            style={{
+              padding: "12px 16px",
+              borderRadius: 18,
+              border: "1px solid rgba(245,158,11,0.18)",
+              background: "rgba(245,158,11,0.1)",
+              color: "var(--app-text)",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            Mở camera trực tiếp
+            <ArrowRight size={16} />
+          </button>
+        </div>
+      </motion.section>
+
+      {error && (
+        <div
+          style={{
+            borderRadius: 20,
+            padding: "14px 16px",
+            background: "rgba(251,113,133,0.08)",
+            border: "1px solid rgba(251,113,133,0.18)",
+            color: "var(--app-danger)",
+          }}
+        >
+          {error}
+        </div>
+      )}
+
+      <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
+        <DashboardCard
+          title="Người dùng đã đăng ký"
+          value={String(persons.length)}
+          detail={`${activePersons} hồ sơ đang hoạt động`}
+          accent="#7dd3fc"
+          icon={Users}
+        />
+        <DashboardCard
+          title="Nhận diện hôm nay"
+          value={String(todayRecognitions)}
+          detail={`${unknownToday} lượt người lạ trong ngày`}
+          accent="#34d399"
+          icon={ScanFace}
+        />
+        <DashboardCard
+          title="Embedding trên RAM"
+          value={String(memory?.ramCount ?? 0)}
+          detail={memory?.loaded ? "Bộ nhớ nhận diện đã sẵn sàng" : "RAM chưa nạp hoàn tất"}
+          accent="#f59e0b"
+          icon={Database}
+        />
+        <DashboardCard
+          title="Hồ sơ cần xử lý"
+          value={String(expiredPersons)}
+          detail={`${totalRecognitions} lượt nhận diện thành công đã lưu`}
+          accent="#fb7185"
+          icon={ShieldAlert}
+        />
+      </section>
+
+      <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20 }}>
+        <div
+          style={{
+            borderRadius: 28,
+            padding: 22,
+            background: "var(--app-surface)",
+            border: "1px solid var(--app-border)",
+            boxShadow: "var(--app-shadow)",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 18 }}>
             <div>
-              <div style={{ fontSize: "14px", color: "#e2e8f0", fontWeight: 600 }}>
-                Hoạt Động Nhận Diện 24h
+              <div style={{ fontSize: 18, fontWeight: 600 }}>Nhận diện theo 24 giờ</div>
+              <div style={{ fontSize: 13, color: "var(--app-muted)", marginTop: 4 }}>
+                Gồm nhận diện thành công, từ chối và người lạ.
               </div>
-              <div style={{ fontSize: "11px", color: "#4a6fa5", marginTop: 2 }}>Theo thời gian thực</div>
             </div>
-            <div style={{ display: "flex", gap: 12 }}>
+            <div style={{ display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
               {[
-                { label: "Nhận diện", color: "#00d4ff" },
-                { label: "Từ chối", color: "#ff2d55" },
-                { label: "Người lạ", color: "#fbbf24" },
-              ].map((l) => (
-                <div key={l.label} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: l.color }} />
-                  <span style={{ fontSize: "10px", color: "#4a6fa5" }}>{l.label}</span>
+                { label: "Nhận diện", color: "var(--app-accent-strong)" },
+                { label: "Từ chối", color: "var(--app-danger)" },
+                { label: "Người lạ", color: "var(--app-warm)" },
+              ].map((item) => (
+                <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--app-muted)" }}>
+                  <div style={{ width: 8, height: 8, borderRadius: 999, background: item.color }} />
+                  {item.label}
                 </div>
               ))}
             </div>
           </div>
-          <ResponsiveContainer width="100%" height={200}>
-            <AreaChart data={recognitionData}>
-              <defs>
-                <linearGradient id="cyan" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#00d4ff" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#00d4ff" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="red" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#ff2d55" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="#ff2d55" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="yellow" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#fbbf24" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="#fbbf24" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-              <XAxis dataKey="time" tick={{ fill: "#4a6fa5", fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: "#4a6fa5", fontSize: 10 }} axisLine={false} tickLine={false} />
-              <Tooltip content={<CustomTooltip />} />
-              <Area type="monotone" dataKey="nhận_diện" stroke="#00d4ff" strokeWidth={2} fill="url(#cyan)" />
-              <Area type="monotone" dataKey="từ_chối" stroke="#ff2d55" strokeWidth={2} fill="url(#red)" />
-              <Area type="monotone" dataKey="lạ" stroke="#fbbf24" strokeWidth={2} fill="url(#yellow)" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </motion.div>
 
-        {/* Weekly bar */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.35 }}
-          style={{
-            background: "rgba(255,255,255,0.02)",
-            border: "1px solid rgba(139,92,246,0.1)",
-            borderRadius: "16px",
-            padding: "20px",
-          }}
-        >
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: "14px", color: "#e2e8f0", fontWeight: 600 }}>Tuần Này</div>
-            <div style={{ fontSize: "11px", color: "#4a6fa5", marginTop: 2 }}>
-              Tổng: 3,343 lượt
-            </div>
+          <div style={{ width: "100%", height: 260 }}>
+            <ResponsiveContainer>
+              <AreaChart data={statistics.hourlyData}>
+                <defs>
+                  <linearGradient id="dashboard-recognition" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="var(--app-accent-strong)" stopOpacity={0.35} />
+                    <stop offset="95%" stopColor="var(--app-accent-strong)" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="dashboard-denied" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="var(--app-danger)" stopOpacity={0.25} />
+                    <stop offset="95%" stopColor="var(--app-danger)" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="dashboard-unknown" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="var(--app-warm)" stopOpacity={0.25} />
+                    <stop offset="95%" stopColor="var(--app-warm)" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="4 4" stroke="rgba(148, 163, 184, 0.08)" />
+                <XAxis dataKey="time" tick={{ fill: "#8ea2bd", fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: "#8ea2bd", fontSize: 11 }} axisLine={false} tickLine={false} />
+                <Tooltip content={tooltip} />
+                <Area type="monotone" dataKey="recognized" stroke="var(--app-accent-strong)" strokeWidth={2} fill="url(#dashboard-recognition)" />
+                <Area type="monotone" dataKey="denied" stroke="var(--app-danger)" strokeWidth={2} fill="url(#dashboard-denied)" />
+                <Area type="monotone" dataKey="unknown" stroke="var(--app-warm)" strokeWidth={2} fill="url(#dashboard-unknown)" />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={weeklyData} barSize={20}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
-              <XAxis dataKey="day" tick={{ fill: "#4a6fa5", fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: "#4a6fa5", fontSize: 10 }} axisLine={false} tickLine={false} />
-              <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="value" fill="#8b5cf6" radius={[6, 6, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </motion.div>
-      </div>
+        </div>
 
-      {/* Bottom row */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-        {/* Recent events */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          style={{
-            background: "rgba(255,255,255,0.02)",
-            border: "1px solid rgba(0,212,255,0.1)",
-            borderRadius: "16px",
-            padding: "20px",
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <div style={{ fontSize: "14px", color: "#e2e8f0", fontWeight: 600 }}>Sự Kiện Gần Đây</div>
-            <button
-              onClick={() => navigate("/activity")}
-              style={{
-                fontSize: "11px",
-                color: "#00d4ff",
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: 4,
-              }}
-            >
-              Xem tất cả <TrendingUp size={10} />
-            </button>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {recentEvents.map((event) => (
-              <div
-                key={event.id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                  padding: "10px",
-                  borderRadius: "10px",
-                  background: "rgba(255,255,255,0.02)",
-                  border: `1px solid ${event.status === "unknown" ? "rgba(255,187,36,0.15)" : "rgba(0,212,255,0.06)"}`,
-                }}
-              >
-                <div
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: "50%",
-                    overflow: "hidden",
-                    flexShrink: 0,
-                    border: `2px solid ${event.status === "success" ? "#00ff88" : "#fbbf24"}`,
-                  }}
-                >
-                  {event.avatar ? (
-                    <ImageWithFallback
-                      src={event.avatar}
-                      alt={event.name}
-                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                    />
-                  ) : (
-                    <div
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        background: "rgba(255,187,36,0.2)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: "14px",
-                      }}
-                    >
-                      ?
-                    </div>
-                  )}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: "13px", color: "#e2e8f0", fontWeight: 500 }}>{event.name}</div>
-                  <div style={{ fontSize: "11px", color: "#4a6fa5" }}>{event.camera}</div>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  {event.status === "success" && (
-                    <div
-                      style={{
-                        fontSize: "12px",
-                        color: "#00ff88",
-                        fontFamily: "'JetBrains Mono', monospace",
-                        fontWeight: 700,
-                      }}
-                    >
-                      {event.confidence}%
-                    </div>
-                  )}
-                  <div style={{ fontSize: "10px", color: "#4a6fa5", fontFamily: "'JetBrains Mono', monospace" }}>
-                    {event.time}
-                  </div>
+        <div style={{ display: "grid", gap: 20 }}>
+          <div
+            style={{
+              borderRadius: 28,
+              padding: 22,
+              background: "var(--app-surface)",
+              border: "1px solid var(--app-border)",
+              boxShadow: "var(--app-shadow)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+              <CalendarClock size={18} color="var(--app-warm)" />
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 600 }}>Tần suất theo tuần</div>
+                <div style={{ fontSize: 13, color: "var(--app-muted)", marginTop: 4 }}>
+                  Theo log nhận diện thành công đã lưu.
                 </div>
               </div>
-            ))}
-          </div>
-        </motion.div>
+            </div>
 
-        {/* Camera status */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.45 }}
-          style={{
-            background: "rgba(255,255,255,0.02)",
-            border: "1px solid rgba(139,92,246,0.1)",
-            borderRadius: "16px",
-            padding: "20px",
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <div style={{ fontSize: "14px", color: "#e2e8f0", fontWeight: 600 }}>Trạng Thái Camera</div>
-            <button
-              onClick={() => navigate("/live")}
-              style={{
-                fontSize: "11px",
-                color: "#8b5cf6",
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: 4,
-              }}
-            >
-              Live feed <Camera size={10} />
-            </button>
+            <div style={{ width: "100%", height: 220 }}>
+              <ResponsiveContainer>
+                <BarChart data={statistics.weeklyData} barSize={22}>
+                  <CartesianGrid strokeDasharray="4 4" stroke="rgba(148, 163, 184, 0.08)" vertical={false} />
+                  <XAxis dataKey="day" tick={{ fill: "#8ea2bd", fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "#8ea2bd", fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <Tooltip content={tooltip} />
+                  <Bar dataKey="value" fill="var(--app-warm)" radius={[8, 8, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {cameras.map((cam) => (
-              <div
-                key={cam.id}
-                style={{
-                  padding: "14px",
-                  borderRadius: "12px",
-                  background: "rgba(255,255,255,0.02)",
-                  border: `1px solid ${cam.status === "online" ? "rgba(0,255,136,0.12)" : "rgba(255,45,85,0.12)"}`,
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{ position: "relative" }}>
-                      <Camera size={18} color={cam.status === "online" ? "#00d4ff" : "#4a6fa5"} />
+
+          <div
+            style={{
+              borderRadius: 28,
+              padding: 22,
+              background: "var(--app-surface)",
+              border: "1px solid var(--app-border)",
+              boxShadow: "var(--app-shadow)",
+            }}
+          >
+            <div style={{ fontSize: 18, fontWeight: 600 }}>Hồ sơ cần chú ý</div>
+            <div style={{ fontSize: 13, color: "var(--app-muted)", marginTop: 4, marginBottom: 18 }}>
+              Ưu tiên kiểm tra hồ sơ hết hạn hoặc đã bị tạm khóa.
+            </div>
+
+            {flaggedProfiles.length === 0 ? (
+              <div style={{ color: "var(--app-muted)", fontSize: 13 }}>Không có hồ sơ cảnh báo.</div>
+            ) : (
+              <div style={{ display: "grid", gap: 12 }}>
+                {flaggedProfiles.map((person) => (
+                  <div
+                    key={person.id}
+                    style={{
+                      padding: 14,
+                      borderRadius: 18,
+                      background: "var(--app-bg-subtle)",
+                      border: "1px solid var(--app-border)",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                      <div>
+                        <div style={{ fontWeight: 600 }}>{person.name}</div>
+                        <div style={{ fontSize: 13, color: "var(--app-muted)", marginTop: 4 }}>
+                          {person.department || "Chưa có phòng ban"} · {person.role || "Chưa có chức vụ"}
+                        </div>
+                      </div>
                       <div
                         style={{
-                          position: "absolute",
-                          bottom: -1,
-                          right: -1,
-                          width: 7,
-                          height: 7,
-                          borderRadius: "50%",
-                          background: cam.status === "online" ? "#00ff88" : "#ff2d55",
-                          boxShadow: cam.status === "online" ? "0 0 6px #00ff88" : "none",
+                          alignSelf: "flex-start",
+                          padding: "6px 10px",
+                          borderRadius: 999,
+                          fontSize: 12,
+                          border: `1px solid ${person.is_expired ? "rgba(251,113,133,0.2)" : "rgba(245,158,11,0.2)"}`,
+                          background: person.is_expired ? "rgba(251,113,133,0.08)" : "rgba(245,158,11,0.08)",
+                          color: person.is_expired ? "var(--app-danger)" : "var(--app-warm)",
                         }}
-                      />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: "13px", color: "#e2e8f0", fontWeight: 500 }}>{cam.name}</div>
-                      <div style={{ fontSize: "10px", color: "#4a6fa5" }}>{cam.resolution}</div>
+                      >
+                        {person.is_expired ? "Hết hạn" : "Tạm khóa"}
+                      </div>
                     </div>
                   </div>
-                  <div style={{ textAlign: "right" }}>
-                    <div
-                      style={{
-                        fontSize: "11px",
-                        color: cam.status === "online" ? "#00ff88" : "#ff2d55",
-                        fontFamily: "'JetBrains Mono', monospace",
-                      }}
-                    >
-                      {cam.status === "online" ? `${cam.fps} FPS` : "OFFLINE"}
-                    </div>
-                    <div style={{ fontSize: "10px", color: "#4a6fa5" }}>
-                      {cam.detections > 0 ? `${cam.detections} lượt` : "—"}
-                    </div>
-                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section
+        style={{
+          borderRadius: 28,
+          padding: 22,
+          background: "var(--app-surface)",
+          border: "1px solid var(--app-border)",
+          boxShadow: "var(--app-shadow)",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 18 }}>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 600 }}>Hoạt động gần đây</div>
+            <div style={{ fontSize: 13, color: "var(--app-muted)", marginTop: 4 }}>
+              6 sự kiện mới nhất từ bảng `recognition_logs`.
+            </div>
+          </div>
+          <button
+            onClick={() => navigate("/activity")}
+            style={{
+              padding: "10px 14px",
+              borderRadius: 16,
+              border: "1px solid var(--app-border)",
+              background: "var(--app-bg-subtle)",
+              color: "var(--app-text)",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            Mở nhật ký
+            <ArrowRight size={15} />
+          </button>
+        </div>
+
+        {recentLogs.length === 0 ? (
+          <div style={{ fontSize: 13, color: "var(--app-muted)" }}>Chưa có log nhận diện.</div>
+        ) : (
+          <div style={{ display: "grid", gap: 12 }}>
+            {recentLogs.map((log) => (
+              <div
+                key={log.id}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "minmax(0, 1.2fr) minmax(120px, 0.8fr) minmax(140px, 0.8fr) auto",
+                  gap: 12,
+                  alignItems: "center",
+                  padding: 14,
+                  borderRadius: 18,
+                  background: "var(--app-bg-subtle)",
+                  border: "1px solid var(--app-border)",
+                }}
+              >
+                <div>
+                  <div style={{ fontWeight: 600 }}>{log.name}</div>
+                  <div style={{ fontSize: 13, color: "var(--app-muted)", marginTop: 4 }}>{log.camera}</div>
                 </div>
-                {cam.status === "online" && (
-                  <div style={{ marginTop: 10 }}>
-                    <div
-                      style={{
-                        height: 3,
-                        borderRadius: "2px",
-                        background: "rgba(255,255,255,0.05)",
-                        overflow: "hidden",
-                      }}
-                    >
-                      <motion.div
-                        animate={{ width: ["0%", "100%"] }}
-                        transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                        style={{
-                          height: "100%",
-                          background: "linear-gradient(90deg, transparent, #00d4ff, transparent)",
-                          width: "30%",
-                        }}
-                      />
-                    </div>
-                  </div>
-                )}
+                <div style={{ fontSize: 13, color: "var(--app-muted)" }}>{log.date}</div>
+                <div style={{ fontSize: 13, color: "var(--app-muted)" }}>{log.time}</div>
+                <div
+                  style={{
+                    padding: "6px 10px",
+                    borderRadius: 999,
+                    fontSize: 12,
+                    border:
+                      log.status === "success"
+                        ? "1px solid rgba(52,211,153,0.2)"
+                        : log.status === "unknown"
+                          ? "1px solid rgba(245,158,11,0.2)"
+                          : "1px solid rgba(251,113,133,0.2)",
+                    background:
+                      log.status === "success"
+                        ? "rgba(52,211,153,0.08)"
+                        : log.status === "unknown"
+                          ? "rgba(245,158,11,0.08)"
+                          : "rgba(251,113,133,0.08)",
+                    color:
+                      log.status === "success"
+                        ? "var(--app-success)"
+                        : log.status === "unknown"
+                          ? "var(--app-warm)"
+                          : "var(--app-danger)",
+                  }}
+                >
+                  {log.status === "success" ? "Thành công" : log.status === "unknown" ? "Người lạ" : "Lỗi"}
+                </div>
               </div>
             ))}
           </div>
-        </motion.div>
-      </div>
-
-      {/* System resources */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.5 }}
-        style={{
-          marginTop: "16px",
-          background: "rgba(255,255,255,0.02)",
-          border: "1px solid rgba(0,212,255,0.1)",
-          borderRadius: "16px",
-          padding: "20px",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <div style={{ fontSize: "14px", color: "#e2e8f0", fontWeight: 600 }}>Tài Nguyên Hệ Thống</div>
-          <Cpu size={14} color="#4a6fa5" />
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
-          {[
-            { label: "CPU", value: 42, color: "#00d4ff", unit: "%" },
-            { label: "GPU", value: 87, color: "#8b5cf6", unit: "%" },
-            { label: "RAM", value: 65, color: "#00ff88", unit: "%" },
-            { label: "Disk I/O", value: 28, color: "#fbbf24", unit: "%" },
-          ].map((item) => (
-            <div key={item.label}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                <span style={{ fontSize: "12px", color: "#7a95b8" }}>{item.label}</span>
-                <span
-                  style={{
-                    fontSize: "12px",
-                    color: item.color,
-                    fontFamily: "'JetBrains Mono', monospace",
-                  }}
-                >
-                  {item.value}{item.unit}
-                </span>
-              </div>
-              <div style={{ height: 6, borderRadius: "3px", background: "rgba(255,255,255,0.05)" }}>
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${item.value}%` }}
-                  transition={{ duration: 1, delay: 0.6, ease: "easeOut" }}
-                  style={{
-                    height: "100%",
-                    borderRadius: "3px",
-                    background: item.color,
-                    boxShadow: `0 0 8px ${item.color}60`,
-                  }}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      </motion.div>
+        )}
+      </section>
     </div>
   );
 }

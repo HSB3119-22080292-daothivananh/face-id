@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion"; // Đã đổi lại chuẩn framer-motion nếu bạn dùng vite
+import { motion, AnimatePresence } from "motion/react";
 import {
   CameraOff,
   Play,

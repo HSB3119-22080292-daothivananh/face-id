@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion"; // Đã sửa 'motion/react' thành chuẩn 'framer-motion'
+import { motion, AnimatePresence } from "motion/react";
 import {
   X, Upload, Shield, Camera, CreditCard,
   ChevronRight, Check, AlertTriangle, Info, RefreshCw, QrCode
@@ -49,17 +49,23 @@ const CCCD_FIELDS: Array<{
 // ─── Shared Styles ────────────────────────────────────────────────────────────
 const inputStyle: React.CSSProperties = {
   width: "100%",
-  padding: "9px 12px",
-  borderRadius: "9px",
-  background: "rgba(255,255,255,0.03)",
-  border: "1px solid rgba(0,212,255,0.15)",
-  color: "#e2e8f0",
-  fontSize: "12px",
+  minHeight: 48,
+  padding: "12px 14px",
+  borderRadius: "14px",
+  background: "rgba(255,255,255,0.96)",
+  border: "1px solid rgba(148,163,184,0.24)",
+  color: "var(--app-text)",
+  fontSize: "14px",
   outline: "none",
   fontFamily: "'Space Grotesk', sans-serif",
   boxSizing: "border-box",
-  transition: "border-color 0.2s",
+  transition: "border-color 0.2s, box-shadow 0.2s",
+  boxShadow: "0 1px 2px rgba(15,23,42,0.04)",
 };
+
+const panelSurface = "linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,251,255,0.96))";
+const mutedSurface = "rgba(248,251,255,0.96)";
+const sectionBorder = "1px solid rgba(148,163,184,0.18)";
 
 // ─── Step Indicator ───────────────────────────────────────────────────────────
 function StepIndicator({ current }: { current: number }) {
@@ -69,36 +75,38 @@ function StepIndicator({ current }: { current: number }) {
     { n: 3, label: "Công việc" },
   ];
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 0, marginBottom: 20 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 0, marginBottom: 26 }}>
       {steps.map((s, i) => (
         <div key={s.n} style={{ display: "flex", alignItems: "center", flex: i < steps.length - 1 ? 1 : "none" }}>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
             <div style={{
-              width: 28, height: 28, borderRadius: "50%",
+              width: 34, height: 34, borderRadius: "50%",
               background: current > s.n
-                ? "linear-gradient(135deg,#00ff88,#00d4ff)"
+                ? "linear-gradient(135deg, #16a34a, #38bdf8)"
                 : current === s.n
-                  ? "linear-gradient(135deg,#00d4ff,#8b5cf6)"
-                  : "rgba(255,255,255,0.05)",
-              border: `2px solid ${current >= s.n ? "transparent" : "rgba(255,255,255,0.1)"}`,
+                  ? "linear-gradient(135deg, #2563eb, #38bdf8)"
+                  : "#ffffff",
+              border: `2px solid ${current >= s.n ? "transparent" : "rgba(148,163,184,0.22)"}`,
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: "11px", fontWeight: 700,
-              color: current >= s.n ? "#000" : "#3a5070",
+              fontSize: "12px", fontWeight: 700,
+              color: current >= s.n ? "#ffffff" : "var(--app-muted)",
               transition: "all 0.3s",
+              boxShadow: current >= s.n ? "0 10px 24px rgba(37,99,235,0.18)" : "none",
             }}>
               {current > s.n ? <Check size={13} /> : s.n}
             </div>
-            <span style={{ fontSize: "9px", color: current >= s.n ? "#7ab8d4" : "#2a4060", whiteSpace: "nowrap" }}>
+            <span style={{ fontSize: "11px", color: current >= s.n ? "var(--app-text-soft)" : "var(--app-muted)", whiteSpace: "nowrap" }}>
               {s.label}
             </span>
           </div>
           {i < steps.length - 1 && (
             <div style={{
-              flex: 1, height: 2, marginBottom: 14, marginLeft: 6, marginRight: 6,
+              flex: 1, height: 3, marginBottom: 18, marginLeft: 8, marginRight: 8,
               background: current > s.n
-                ? "linear-gradient(90deg,#00ff88,#00d4ff)"
-                : "rgba(255,255,255,0.06)",
+                ? "linear-gradient(90deg, #16a34a, #38bdf8)"
+                : "rgba(148,163,184,0.18)",
               transition: "background 0.4s",
+              borderRadius: 999,
             }} />
           )}
         </div>
@@ -188,16 +196,48 @@ function StepCCCD({
     try {
       const response = await apiClient.extractOCR(file, "back");
       if (response.success && response.data) {
-        const { issue_date, issued_by, special_features } = response.data;
+        const {
+          id_number,
+          full_name,
+          dob,
+          gender,
+          expiry_date,
+          issue_date,
+          issued_by,
+          special_features,
+          mrz_id,
+          mrz_name,
+          mrz_dob,
+          mrz_gender,
+          mrz_expiry,
+        } = response.data;
 
         setCccd((prev) => ({
           ...prev,
-          ...(issue_date       && { issue_date }),
-          ...(issued_by        && { issued_by }),
+          ...(!prev.id_number && (id_number || mrz_id) && { id_number: id_number || mrz_id }),
+          ...(!prev.full_name && (full_name || mrz_name) && { full_name: full_name || mrz_name }),
+          ...(!prev.dob && (dob || mrz_dob) && { dob: dob || mrz_dob }),
+          ...(!prev.gender && (gender || mrz_gender) && { gender: gender || mrz_gender }),
+          ...(!prev.expiry_date && (expiry_date || mrz_expiry) && { expiry_date: expiry_date || mrz_expiry }),
+          ...(issue_date && { issue_date }),
+          ...(issued_by && { issued_by }),
           ...(special_features && { special_features }),
         }));
 
-        const hasData = issue_date || issued_by || special_features;
+        const hasData =
+          id_number ||
+          full_name ||
+          dob ||
+          gender ||
+          expiry_date ||
+          issue_date ||
+          issued_by ||
+          special_features ||
+          mrz_id ||
+          mrz_name ||
+          mrz_dob ||
+          mrz_gender ||
+          mrz_expiry;
         if (hasData) {
           setBackStatus("ok");
           setBackMsg("✓ Đã lấy dữ liệu mặt sau.");
@@ -874,7 +914,7 @@ export function RegisterModal({ onClose, onSuccess }: Props) {
         style={{
           width: "100%", maxWidth: 580,
           maxHeight: "95vh", overflowY: "auto",
-          background: "#07101a",
+          background: "var(--app-surface)",
           border: "1px solid rgba(0,212,255,0.2)",
           borderRadius: "24px",
           padding: "24px",
@@ -884,17 +924,17 @@ export function RegisterModal({ onClose, onSuccess }: Props) {
         {/* ── Header ──────────────────────────────────────────────────────── */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
           <div>
-            <h2 style={{ fontSize: "16px", color: "#e2e8f0", margin: 0, fontFamily: "'Space Grotesk', sans-serif", letterSpacing: "0.05em" }}>
+            <h2 style={{ fontSize: "16px", color: "var(--app-text)", margin: 0, fontFamily: "'Space Grotesk', sans-serif", letterSpacing: "0.05em" }}>
               ĐĂNG KÝ NHÂN VIÊN MỚI
             </h2>
-            <p style={{ fontSize: "11px", color: "#4a6fa5", margin: "2px 0 0" }}>
+            <p style={{ fontSize: "11px", color: "var(--app-muted)", margin: "2px 0 0" }}>
               {step < 4 ? `Bước ${step}/3 — ${stepLabels[step]}` : stepLabels[4]}
             </p>
           </div>
           {!submitting && (
             <button
               onClick={handleClose}
-              style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "8px", cursor: "pointer", color: "#4a6fa5", padding: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}
+              style={{ background: "var(--app-bg-subtle)", border: "1px solid var(--app-border)", borderRadius: "8px", cursor: "pointer", color: "var(--app-muted)", padding: "6px", display: "flex", alignItems: "center", justifyContent: "center" }}
             >
               <X size={18} />
             </button>

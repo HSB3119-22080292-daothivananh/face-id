@@ -600,7 +600,7 @@ if root_dir not in sys.path:
 os.environ["FLAGS_use_mkldnn"] = "0"
 os.environ["FLAGS_use_onednn"] = "0"
 
-import uuid, json, time, logging, cv2, numpy as np
+import uuid, json, time, logging, cv2, numpy as np, re
 from PIL import Image
 from contextlib import asynccontextmanager
 from datetime import date
@@ -816,29 +816,6 @@ class CCCDBackSimpleExtractor:
 
         def _clean_mrz_line(raw):
             cleaned = raw.upper()
-            for ch, rep in [(" ", "<"), ("«", "<"), ("»", "<"), ("|", "<"), ("_", "<")]:
-                cleaned = cleaned.replace(ch, rep)
-            return re.sub(r'[^A-Z0-9<]', '<', cleaned)
-
-        cleaned = [((_clean_mrz_line(ln)) + "<" * 30)[:30] for ln in lines[:3]]
-        l1, l2, l3 = cleaned
-        result["mrz_raw"] = "\n".join(cleaned)
-
-        result["mrz_doc_type"] = l1[0:2].replace("<", "").strip()
-        result["mrz_country"] = l1[2:5].replace("<", "").strip()
-
-        import re
-        id_m = re.match(r'^([0-9]{9,12})', l1[5:30])
-        if id_m:
-            result["mrz_id"] = id_m.group(1)
-
-        dob_raw = l2[0:6]
-        gender_raw = l2[7] if len(l2) > 7 else "<"
-        exp_raw = l2[8:14]
-
-        if re.fullmatch(r'\d{6}', dob_raw):
-            yy, mm, dd = dob_raw[0:2], dob_raw[2:4], dob_raw[4:6]
-            cc = "19" if int(yy) >= 30 else "20"
             result["mrz_dob"] = f"{dd}/{mm}/{cc}{yy}"
 
         result["mrz_gender"] = {"M": "Nam", "F": "Nữ", "<": "Không xác định"}.get(gender_raw, gender_raw)
@@ -1025,12 +1002,219 @@ async def extract_ocr_local(file: UploadFile = File(...), side: str = Form(...))
                 "address": raw.get("place_of_residence", ""),
                 "expiry_date": raw.get("date_of_expiry", ""),
             }
-
         else:  
             raw = read_info.get_back_info(temp_path)
             logger.info(f"[OCR] Mặt sau raw: {raw}")
             mapped_data = {
                 # 3 trường cũ — giữ nguyên để React không bị lỗi
+                "id_number":        raw.get("mrz_id", ""),
+                "full_name":        raw.get("mrz_name", ""),
+                "dob":              raw.get("mrz_dob", ""),
+                "gender":           raw.get("mrz_gender", ""),
+                "expiry_date":      raw.get("mrz_expiry", ""),
+                "issue_date":       raw.get("issue_date", ""),
+                "issued_by":        raw.get("issued_by", ""),
+                "special_features": raw.get("special_features", ""),
+ 
+                # 5 trường MRZ mới — thêm vào
+                "mrz_id":           raw.get("mrz_id", ""),
+                "mrz_dob":          raw.get("mrz_dob", ""),
+                "mrz_gender":       raw.get("mrz_gender", ""),
+                "mrz_expiry":       raw.get("mrz_expiry", ""),
+                "mrz_name":         raw.get("mrz_name", ""),
+            }
+
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+        logger.info(f"[OCR] Trả về: {mapped_data}")
+        return {"success": True, "data": mapped_data}
+
+    except Exception as e:
+        logger.error(f"[OCR] Lỗi: {e}", exc_info=True)
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        return {"success": False, "message": str(e), "data": {}}
+# ═══════════════════════════════════════════════════════════════════════════
+
+ocr_predictor = None
+read_info = None
+read_back = None 
+back_simple_extractor = None  # 🆕 Mới thêm
+is_ai_ready = False
+
+def load_ai_background():
+    global ocr_predictor, read_info, read_back, back_simple_extractor, is_ai_ready 
+    try:
+        logger.info("[AI_LOADER] Bắt đầu nạp mô hình AI chạy ngầm...")
+        
+        # Nạp VietOCR
+        vocr_config_path = os.path.join(current_dir, 'Vocr', 'config', 'vgg-seq2seq.yml')
+        config_vietocr = Cfg_vietocr.load_config_from_file(vocr_config_path)
+        config_vietocr['weights'] = os.path.join(current_dir, 'Models', 'seq2seqocr.pth')
+        config_vietocr['device'] = 'cpu'
+        ocr_predictor = Predictor(config_vietocr)
+
+        # Nạp YOLOv7 cho mặt trước
+        get_dictionary = Detect(opt)
+        scan_weight = os.path.join(current_dir, 'Models', 'cccdYoloV7.pt')
+        imgsz, stride, device, half, model, names = get_dictionary.load_model(scan_weight)
+        
+        read_info = ReadInfo(imgsz, stride, device, half, model, names, ocr_predictor)
+        
+        # 🆕 Khởi tạo extractor đơn giản cho mặt sau
+        template_path = os.path.join(current_dir, 'templates', 'cccd_back_sample.jpg')
+        if os.path.exists(template_path):
+            back_simple_extractor = CCCDBackSimpleExtractor(template_path, ocr_predictor)
+            logger.info("[AI_LOADER] Đã khởi tạo CCCDBackSimpleExtractor")
+        else:
+            # Fallback về ReadBackInfo cũ nếu không có template
+            read_back = ReadBackInfo(ocr_predictor)
+            logger.warning("[AI_LOADER] Không tìm thấy template, dùng ReadBackInfo cũ")
+        
+        is_ai_ready = True
+        logger.info("[AI_LOADER] HOÀN TẤT! Hệ thống AI đã sẵn sàng.")
+    except Exception as e:
+        logger.error(f"[AI_LOADER] Lỗi khi nạp AI: {e}", exc_info=True)
+
+
+# ─── Startup ────────────────────────────────────────────────────────────────
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("[Startup] Khởi tạo Database...")
+    init_database()
+    
+    logger.info("[Startup] Nạp embedding vào RAM...")
+    _load_embeddings_to_ram()
+    logger.info(f"[Startup] {face_memory_store.count} khuôn mặt trên RAM")
+
+    threading.Thread(target=load_ai_background, daemon=True).start()
+    
+    yield
+    logger.info("[Shutdown] Bye!")
+
+
+def _load_embeddings_to_ram():
+    conn = None
+    cursor = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT e.person_id, p.name, p.role, p.img_path,
+                   p.work_expiry_date, e.embedding_vector
+            FROM face_embeddings e
+            JOIN persons p ON e.person_id = p.id
+            WHERE p.status = 'active'
+        """)
+        rows = cursor.fetchall()
+        parsed = []
+        for row in rows:
+            try:
+                parsed.append({
+                    "person_id": row["person_id"],
+                    "name": row["name"],
+                    "role": row.get("role", ""),
+                    "img_path": row.get("img_path", ""),
+                    "work_expiry_date": str(row["work_expiry_date"]) if row.get("work_expiry_date") else None,
+                    "embedding_vector": json.loads(row["embedding_vector"]),
+                })
+            except Exception as e:
+                logger.warning(f"[Startup] Bỏ qua khuôn mặt lỗi: {e}")
+        face_memory_store.load_all(parsed)
+    except Exception as e:
+        logger.error(f"[Startup] Lỗi kết nối DB: {e}")
+        face_memory_store.load_all([]) 
+    finally:
+        if cursor: cursor.close()
+        if conn and conn.is_connected(): conn.close()
+
+
+# ─── App ────────────────────────────────────────────────────────────────────
+app = FastAPI(lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+
+class PersonUpdate(BaseModel):
+    name: str
+    role: str
+    department: str
+
+
+def save_log_to_db(log_queries: list) -> None:
+    if not log_queries:
+        return
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.executemany(
+            "INSERT INTO recognition_logs (id,person_id,status,confidence,camera,action) VALUES (%s,%s,%s,%s,%s,%s)",
+            log_queries,
+        )
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        logger.error(f"[Log] {e}")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 🆕 API OCR - ĐÃ CẬP NHẬT DÙNG CCCDBackSimpleExtractor CHO MẶT SAU
+# ═══════════════════════════════════════════════════════════════════════════
+
+@app.post("/api/face/ocr")
+async def extract_ocr_local(file: UploadFile = File(...), side: str = Form(...)):
+    if not is_ai_ready:
+        return {"success": False, "message": "Hệ thống AI đang khởi động, vui lòng thử lại sau 1-2 phút!"}
+
+    temp_path = ""
+    try:
+        temp_filename = f"temp_cccd_{uuid.uuid4().hex}.jpg"
+        temp_path = os.path.join(UPLOAD_DIR, temp_filename)
+        file_bytes = await file.read()
+        with open(temp_path, "wb") as f:
+            f.write(file_bytes)
+
+        logger.info(f"[OCR] Phân tích mặt {side}...")
+
+        if side == "front":
+            raw = read_info.get_all_info(temp_path)
+            logger.info(f"[OCR] Mặt trước raw: {raw}")
+            mapped_data = {
+                "id_number": raw.get("id", ""),
+                "full_name": raw.get("full_name", ""),
+                "dob": raw.get("date_of_birth", ""),
+                "gender": raw.get("sex", ""),
+                "nationality": raw.get("nationality", ""),
+                "hometown": raw.get("place_of_origin", ""),
+                "address": raw.get("place_of_residence", ""),
+                "expiry_date": raw.get("date_of_expiry", ""),
+            }
+
+        else:  
+            if back_simple_extractor is not None:
+                raw = back_simple_extractor.extract(temp_path)
+            elif read_back is not None:
+                raw = read_back.get_back_info(temp_path)
+            else:
+                raw = read_info.get_back_info(temp_path)
+            
+            logger.info(f"[OCR] Mặt sau raw: {raw}")
+            mapped_data = {
+                # 3 trường cũ — giữ nguyên để React không bị lỗi
+                "id_number":        raw.get("mrz_id", ""),
+                "full_name":        raw.get("mrz_name", ""),
+                "dob":              raw.get("mrz_dob", ""),
+                "gender":           raw.get("mrz_gender", ""),
+                "expiry_date":      raw.get("mrz_expiry", ""),
                 "issue_date":       raw.get("issue_date", ""),
                 "issued_by":        raw.get("issued_by", ""),
                 "special_features": raw.get("special_features", ""),
@@ -1267,13 +1451,16 @@ async def get_persons():
     try:
         cursor.execute("""
             SELECT p.id, p.name, p.role, p.department, p.status,
-                   p.img_path, p.work_expiry_date,
-                   p.registered_at AS registered,
+                   p.work_expiry_date, p.img_url, p.img_path,
+                   p.registered_at, p.updated_at,
                    (SELECT COUNT(*) FROM face_embeddings e WHERE e.person_id = p.id) AS embeddings,
                    (SELECT COUNT(*) FROM recognition_logs l WHERE l.person_id = p.id AND l.status = 'success') AS recognitions,
-                   c.id_number, c.full_name AS cccd_name, c.dob, c.gender, c.nationality,
-                   c.hometown, c.address, c.expiry_date AS cccd_expiry,
-                   c.front_img_path, c.back_img_path
+                   c.id AS citizen_id_record_id,
+                   c.front_img_path, c.back_img_path,
+                   c.id_number, c.full_name, c.dob, c.gender, c.nationality,
+                   c.hometown, c.address, c.expiry_date, c.issue_date,
+                   c.special_features, c.created_at AS citizen_created_at,
+                   c.updated_at AS citizen_updated_at
             FROM persons p
             LEFT JOIN citizen_ids c ON c.person_id = p.id
             ORDER BY p.registered_at DESC
@@ -1281,8 +1468,15 @@ async def get_persons():
         rows = cursor.fetchall()
         today = str(date.today())
         for row in rows:
-            raw = row.get("img_path") or ""
-            row["img"] = f"/uploads/{Path(raw).name}" if raw else ""
+            raw_avatar = row.get("img_path") or ""
+            raw_front = row.get("front_img_path") or ""
+            raw_back = row.get("back_img_path") or ""
+
+            row["img"] = row.get("img_url") or (f"/uploads/{Path(raw_avatar).name}" if raw_avatar else "")
+            row["cccd_front_img"] = f"/uploads/{Path(raw_front).name}" if raw_front else ""
+            row["cccd_back_img"] = f"/uploads/{Path(raw_back).name}" if raw_back else ""
+            row["registered"] = row.get("registered_at")
+
             exp = row.get("work_expiry_date")
             row["is_expired"] = bool(exp and str(exp) < today)
         return {"success": True, "data": rows, "total": len(rows), "ramCount": face_memory_store.count}
