@@ -268,36 +268,74 @@ export function LiveRecognition() {
   }, []);
 
   // ─── Start Camera ─────────────────────────────────────────────────────────
-  const startCamera = async () => {
+    const startCamera = async () => {
     setIsLoading(true);
     setError(null);
+
+    // 1. QUAN TRỌNG: Dừng stream cũ để giải phóng camera (tránh lỗi "Camera is in use")
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+
     try {
+      // Cấu hình video
+      const videoConstraints: any = {
+        facingMode: "user", // Camera trước
+        // Mobile giảm độ phân giải lý tưởng xuống để tương thích tốt hơn
+        // Laptop giữ nguyên độ phân giải cao
+        width: isMobile ? { ideal: 640, max: 1280 } : { ideal: 1280 },
+        height: isMobile ? { ideal: 480, max: 720 } : { ideal: 720 },
+        frameRate: isMobile ? { ideal: 15, max: 30 } : { ideal: 30 },
+      };
+
+      // 2. Chỉ dùng advanced constraints trên Desktop (Mobile thường gây lỗi hoặc bỏ qua)
+      if (!isMobile) {
+        videoConstraints.advanced = [
+          { exposureMode: "continuous" },
+          { whiteBalanceMode: "continuous" },
+        ];
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width:  { ideal: isMobile ? 1280 : 1920 },
-          height: { ideal: isMobile ? 720 : 1080 },
-          facingMode: "user",
-          frameRate: { ideal: 30 },
-          advanced: [
-            { exposureMode: "continuous" } as any,
-            { whiteBalanceMode: "continuous" } as any,
-          ],
-        },
+        video: videoConstraints,
         audio: false,
       });
+
       streamRef.current = stream;
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+        
+        // 3. Chờ metadata load xong rồi mới play (Quan trọng trên Safari iOS)
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current?.play()
+            .then(() => {
+              setIsStreaming(true);
+            })
+            .catch((err) => {
+              console.error("Lỗi play video:", err);
+              setError("Không thể phát video.");
+            });
+        };
       }
-      setIsStreaming(true);
-    } catch {
-      setError("Không thể mở Camera. Kiểm tra quyền truy cập trình duyệt.");
+    } catch (err: any) {
+      console.error("Lỗi Camera chi tiết:", err); // Xem log console để debug
+      
+      // Hiển thị lỗi chi tiết hơn cho user
+      if (err.name === 'NotAllowedError') {
+        setError("Bạn chưa cấp quyền Camera. Vui lòng kiểm tra cài đặt trình duyệt.");
+      } else if (err.name === 'NotFoundError') {
+        setError("Không tìm thấy Camera nào trên thiết bị.");
+      } else if (err.name === 'OverconstrainedError') {
+        setError("Độ phân giải camera không được hỗ trợ. Thử dùng trình duyệt khác.");
+      } else {
+        setError("Lỗi mở Camera: " + (err.message || "Không xác định"));
+      }
     } finally {
       setIsLoading(false);
     }
   };
-
   // ─── Stop Camera ──────────────────────────────────────────────────────────
   const stopCamera = () => {
     if (streamRef.current) {
@@ -366,18 +404,18 @@ export function LiveRecognition() {
           }}>
             <canvas ref={canvasRef} style={{ display: "none" }} />
             <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                display: isStreaming ? "block" : "none",
-                transform: "scaleX(-1)",
-              }}
-            />
+  ref={videoRef}
+  autoPlay
+  playsInline  // << BẮT BUỘC CHO iOS
+  muted        // << BẮT BUỘC CHO MOBILE ĐỂ TỰ ĐỘNG PLAY
+  style={{
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: isStreaming ? "block" : "none",
+    transform: "scaleX(-1)",
+  }}
+/>
 
             {!isStreaming && (
               <div style={{
