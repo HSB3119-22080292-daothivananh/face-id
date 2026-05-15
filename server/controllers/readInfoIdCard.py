@@ -4,6 +4,7 @@ import re
 import os
 import base64
 import json
+import warnings
 import numpy as np
 from PIL import Image
 import google.generativeai as genai
@@ -12,19 +13,28 @@ from DetecInfoBoxes.GetBoxes import Detect
 from util import correct_skew
 from config import opt
 
+# Tắt cảnh báo FutureWarning từ google.generativeai (tạm thời)
+warnings.filterwarnings("ignore", category=FutureWarning, module="google.generativeai")
+
 get_dictionary = Detect(opt)
 
 # ===========================================================================
-# GEMINI CONFIG
+# GEMINI CONFIG - Lấy API key từ biến môi trường (bắt buộc)
 # ===========================================================================
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+if not GEMINI_API_KEY:
+    # Fallback cứng (không khuyến khích, chỉ để debug)
+    GEMINI_API_KEY = "AIzaSyBwZJ2OhnX6pVk2YWOPekJeym9p-SxCZb4"
+    print("[WARN] Dùng API key mặc định – hãy set biến môi trường GEMINI_API_KEY")
 
-genai.configure(api_key="AIzaSyCKqP7b9WEDmdydkrXvlB_lBw02bIVXh8I")
+genai.configure(api_key=GEMINI_API_KEY)
 
 _gemini_model = None
 
 def _get_gemini_model():
     global _gemini_model
     if _gemini_model is None:
+        # Dùng model ổn định, nếu muốn dùng gemini-2.0-flash có thể đổi
         _gemini_model = genai.GenerativeModel("gemini-flash-latest")
     return _gemini_model
 
@@ -32,7 +42,6 @@ def _get_gemini_model():
 # ===========================================================================
 # GEMINI OCR MẶT SAU CCCD
 # ===========================================================================
-
 _BACK_PROMPT = """Bạn là hệ thống OCR chuyên nghiệp đọc mặt sau thẻ Căn Cước Công Dân (CCCD) Việt Nam.
 
 Hãy đọc ảnh và trích xuất CHÍNH XÁC các thông tin sau, trả về JSON thuần túy (không có markdown, không có ```):
@@ -52,15 +61,9 @@ Lưu ý quan trọng:
 - Chỉ trả về JSON, không giải thích gì thêm
 """
 
-def _encode_image_to_base64(img_path: str) -> str:
-    """Đọc ảnh từ đường dẫn và encode sang base64."""
-    with open(img_path, "rb") as f:
-        return base64.b64encode(f.read()).decode("utf-8")
-
-
 def _encode_cv2_to_base64(img_cv2) -> str:
     """Encode ảnh OpenCV (numpy array) sang base64 JPEG."""
-    _, buffer = cv2.imencode(".jpg", img_cv2)
+    _, buffer = cv2.imencode(".jpg", img_cv2, [cv2.IMWRITE_JPEG_QUALITY, 85])
     return base64.b64encode(buffer).decode("utf-8")
 
 
@@ -140,7 +143,6 @@ def extract_back_with_gemini(img_path: str) -> dict:
     }
 
     try:
-        # Đọc và tiền xử lý ảnh
         img = cv2.imread(img_path)
         if img is None:
             print(f"[Gemini] Không đọc được ảnh: {img_path}")
@@ -151,10 +153,8 @@ def extract_back_with_gemini(img_path: str) -> dict:
         except Exception as e:
             print(f"[Gemini] correct_skew lỗi (bỏ qua): {e}")
 
-        # Encode ảnh sang base64
         img_b64 = _encode_cv2_to_base64(img)
 
-        # Gọi Gemini Vision
         print("[Gemini] Đang gọi Gemini Vision API cho mặt sau...")
         t0 = time.time()
 
@@ -172,17 +172,15 @@ def extract_back_with_gemini(img_path: str) -> dict:
         elapsed = time.time() - t0
         print(f"[Gemini] API trả về sau {elapsed:.2f}s")
 
-        # Parse JSON từ response
         raw_text = response.text.strip()
         print(f"[Gemini] Raw response:\n{raw_text}")
 
-        # Làm sạch nếu có markdown fence
+        # Làm sạch markdown JSON
         raw_text = re.sub(r"^```(?:json)?\s*", "", raw_text)
         raw_text = re.sub(r"\s*```$", "", raw_text)
 
         gemini_data = json.loads(raw_text)
 
-        # Map vào result
         result["special_features"] = gemini_data.get("special_features", "").strip()
         result["issue_date"]        = gemini_data.get("issue_date", "").strip()
         result["issued_by"]         = gemini_data.get("issued_by", "").strip()
@@ -204,6 +202,7 @@ def extract_back_with_gemini(img_path: str) -> dict:
             print(f"   {k:<20}: {v}")
 
     except json.JSONDecodeError as e:
+        raw_text = locals().get("raw_text", "Không có response text")
         print(f"[Gemini] ❌ Lỗi parse JSON: {e}")
         print(f"[Gemini] Response gốc: {raw_text}")
     except Exception as e:
@@ -213,7 +212,7 @@ def extract_back_with_gemini(img_path: str) -> dict:
 
 
 # ===========================================================================
-# CLASS CHÍNH - Mặt trước dùng YOLO + VietOCR (giữ nguyên)
+# CLASS CHÍNH - Mặt trước dùng YOLO + VietOCR
 # ===========================================================================
 
 class ReadInfo:
@@ -247,8 +246,8 @@ class ReadInfo:
             Image.fromarray(cv2.cvtColor(crop, cv2.COLOR_BGR2RGB))
         )
 
-    # ── MẶT TRƯỚC: YOLO + VietOCR (không thay đổi) ──────────────────────
     def get_all_info(self, img_path: str) -> dict:
+        """Trích xuất thông tin mặt trước CCCD bằng YOLO + VietOCR"""
         st  = time.time()
         img = cv2.imread(img_path)
         if img is None:
@@ -284,8 +283,8 @@ class ReadInfo:
         print(f"[Front] Xong trong {time.time() - st:.2f}s")
         return result
 
-    # ── MẶT SAU: Gemini Vision ────────────────────────────────────────────
     def get_back_info(self, img_path: str) -> dict:
+        """Trích xuất thông tin mặt sau CCCD bằng Gemini Vision"""
         st = time.time()
         print("\n--- [GEMINI MẶT SAU] ---")
         result = extract_back_with_gemini(img_path)

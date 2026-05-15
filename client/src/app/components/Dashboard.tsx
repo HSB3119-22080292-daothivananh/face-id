@@ -31,11 +31,20 @@ function DashboardCard({
   accent: string;
   icon: any;
 }) {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
   return (
     <div
       style={{
-        borderRadius: 24,
-        padding: 20,
+        borderRadius: isMobile ? 16 : 24,
+        padding: isMobile ? 16 : 20,
         background: "var(--app-surface)",
         border: "1px solid var(--app-border)",
         boxShadow: "var(--app-shadow)",
@@ -44,23 +53,24 @@ function DashboardCard({
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
         <div
           style={{
-            width: 46,
-            height: 46,
-            borderRadius: 16,
+            width: isMobile ? 40 : 46,
+            height: isMobile ? 40 : 46,
+            borderRadius: isMobile ? 12 : 16,
             display: "grid",
             placeItems: "center",
             background: `${accent}20`,
             border: `1px solid ${accent}28`,
+            flexShrink: 0,
           }}
         >
-          <Icon size={20} color={accent} />
+          <Icon size={isMobile ? 18 : 20} color={accent} />
         </div>
-        <div style={{ minWidth: 0, textAlign: "right" }}>
-          <div style={{ fontSize: 13, color: "var(--app-muted)" }}>{title}</div>
-          <div style={{ fontSize: 30, fontWeight: 700, marginTop: 10 }}>{value}</div>
+        <div style={{ minWidth: 0, textAlign: "right", flex: 1 }}>
+          <div style={{ fontSize: isMobile ? 11 : 13, color: "var(--app-muted)", lineHeight: 1.4 }}>{title}</div>
+          <div style={{ fontSize: isMobile ? 24 : 30, fontWeight: 700, marginTop: isMobile ? 6 : 10, lineHeight: 1.2 }}>{value}</div>
         </div>
       </div>
-      <div style={{ marginTop: 14, fontSize: 13, color: "var(--app-muted)" }}>{detail}</div>
+      <div style={{ marginTop: isMobile ? 10 : 14, fontSize: isMobile ? 11 : 13, color: "var(--app-muted)", lineHeight: 1.4 }}>{detail}</div>
     </div>
   );
 }
@@ -73,6 +83,14 @@ export function Dashboard() {
   const [memory, setMemory] = useState<MemoryStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -139,18 +157,19 @@ export function Dashboard() {
     return (
       <div
         style={{
-          borderRadius: 16,
-          padding: 12,
+          borderRadius: isMobile ? 12 : 16,
+          padding: isMobile ? 8 : 12,
           background: "var(--app-surface-overlay)",
           border: "1px solid var(--app-border)",
           boxShadow: "var(--app-shadow)",
+          fontSize: isMobile ? 11 : 12,
         }}
       >
-        <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 8 }}>{label}</div>
+        <div style={{ fontSize: isMobile ? 10 : 12, color: "var(--app-muted)", marginBottom: isMobile ? 4 : 8 }}>{label}</div>
         {payload.map((entry: any) => (
-          <div key={entry.dataKey} style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
-            <div style={{ width: 8, height: 8, borderRadius: 999, background: entry.color }} />
-            <div style={{ fontSize: 13 }}>{entry.value}</div>
+          <div key={entry.dataKey} style={{ display: "flex", alignItems: "center", gap: isMobile ? 4 : 8, marginTop: isMobile ? 2 : 4 }}>
+            <div style={{ width: isMobile ? 6 : 8, height: isMobile ? 6 : 8, borderRadius: 999, background: entry.color }} />
+            <div style={{ fontSize: isMobile ? 11 : 13 }}>{entry.value}</div>
           </div>
         ))}
       </div>
@@ -159,92 +178,121 @@ export function Dashboard() {
 
   if (loading) {
     return (
-      <div style={{ padding: 28, height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ padding: isMobile ? 16 : 28, height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div style={{ textAlign: "center" }}>
-          <motion.div animate={{ rotate: 360 }} transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }} style={{ display: "inline-block", marginBottom: 16 }}>
-            <Loader2 size={36} color="var(--app-accent)" />
+          <motion.div animate={{ rotate: 360 }} transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }} style={{ display: "inline-block", marginBottom: isMobile ? 12 : 16 }}>
+            <Loader2 size={isMobile ? 28 : 36} color="var(--app-accent)" />
           </motion.div>
-          <div style={{ color: "var(--app-muted)", fontSize: 14 }}>Đang tải dữ liệu dashboard...</div>
+          <div style={{ color: "var(--app-muted)", fontSize: isMobile ? 12 : 14 }}>Đang tải dữ liệu dashboard...</div>
         </div>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: 28, display: "grid", gap: 20 }}>
+    <div style={{ padding: isMobile ? 12 : 28, display: "grid", gap: isMobile ? 16 : 20, maxWidth: "100%", overflowX: "hidden" }}>
       <motion.section
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         style={{
-          borderRadius: 28,
-          padding: 24,
+          borderRadius: isMobile ? 16 : 28,
+          padding: isMobile ? 16 : 24,
           border: "1px solid var(--app-border)",
           background: "linear-gradient(135deg, #ffffff, var(--app-bg-subtle))",
           boxShadow: "var(--app-shadow)",
           display: "flex",
+          flexDirection: isMobile ? "column" : "row",
           justifyContent: "space-between",
-          gap: 16,
+          gap: isMobile ? 16 : 16,
           flexWrap: "wrap",
         }}
       >
-        <div style={{ maxWidth: 620 }}>
+        <div style={{ maxWidth: isMobile ? "100%" : 620, flex: isMobile ? "none" : 1 }}>
           <div
             style={{
               display: "inline-flex",
               alignItems: "center",
-              gap: 8,
-              padding: "8px 12px",
+              gap: isMobile ? 4 : 8,
+              padding: isMobile ? "6px 10px" : "8px 12px",
               borderRadius: 999,
               background: "rgba(125,211,252,0.08)",
               border: "1px solid rgba(125,211,252,0.16)",
               color: "var(--app-accent)",
-              fontSize: 12,
-              marginBottom: 16,
+              fontSize: isMobile ? 10 : 12,
+              marginBottom: isMobile ? 12 : 16,
+              flexWrap: "wrap",
             }}
           >
-            <Database size={14} />
-            Dữ liệu lấy trực tiếp từ API người dùng, log và thống kê
+            <Database size={isMobile ? 12 : 14} />
+            <span>Dữ liệu lấy trực tiếp từ API người dùng, log và thống kê</span>
           </div>
-          <div style={{ fontSize: 30, fontWeight: 700, lineHeight: 1.2 }}>Bỏ số liệu giả, giữ lại phần hữu ích để vận hành</div>
-          <div style={{ marginTop: 10, color: "var(--app-muted)", fontSize: 14, lineHeight: 1.7 }}>
+          <div style={{ 
+            fontSize: isMobile ? 20 : 30, 
+            fontWeight: 700, 
+            lineHeight: 1.3,
+            wordBreak: "break-word",
+          }}>
+            Bỏ số liệu giả, giữ lại phần hữu ích để vận hành
+          </div>
+          <div style={{ 
+            marginTop: isMobile ? 8 : 10, 
+            color: "var(--app-muted)", 
+            fontSize: isMobile ? 12 : 14, 
+            lineHeight: 1.6,
+          }}>
             Dashboard hiện chỉ giữ các chỉ số lấy được từ backend: hồ sơ đăng ký, lượt nhận diện, trạng thái RAM và những hồ sơ cần kiểm tra.
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-start" }}>
+        <div style={{ 
+          display: "flex", 
+          gap: isMobile ? 8 : 12, 
+          flexWrap: "wrap", 
+          alignItems: "flex-start",
+          flexDirection: isMobile ? "column" : "row",
+          width: isMobile ? "100%" : "auto",
+        }}>
           <button
             onClick={() => navigate("/faces")}
             style={{
-              padding: "12px 16px",
-              borderRadius: 18,
+              padding: isMobile ? "10px 14px" : "12px 16px",
+              borderRadius: isMobile ? 14 : 18,
               border: "1px solid rgba(125,211,252,0.22)",
               background: "rgba(125,211,252,0.12)",
               color: "var(--app-text)",
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
-              gap: 8,
+              gap: isMobile ? 6 : 8,
+              fontSize: isMobile ? 13 : 14,
+              flex: isMobile ? 1 : "none",
+              justifyContent: "center",
+              minWidth: isMobile ? "100%" : "auto",
             }}
           >
             Xem hồ sơ người dùng
-            <ArrowRight size={16} />
+            <ArrowRight size={isMobile ? 14 : 16} />
           </button>
           <button
             onClick={() => navigate("/live")}
             style={{
-              padding: "12px 16px",
-              borderRadius: 18,
+              padding: isMobile ? "10px 14px" : "12px 16px",
+              borderRadius: isMobile ? 14 : 18,
               border: "1px solid rgba(245,158,11,0.18)",
               background: "rgba(245,158,11,0.1)",
               color: "var(--app-text)",
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
-              gap: 8,
+              gap: isMobile ? 6 : 8,
+              fontSize: isMobile ? 13 : 14,
+              flex: isMobile ? 1 : "none",
+              justifyContent: "center",
+              minWidth: isMobile ? "100%" : "auto",
             }}
           >
             Mở camera trực tiếp
-            <ArrowRight size={16} />
+            <ArrowRight size={isMobile ? 14 : 16} />
           </button>
         </div>
       </motion.section>
@@ -252,18 +300,23 @@ export function Dashboard() {
       {error && (
         <div
           style={{
-            borderRadius: 20,
-            padding: "14px 16px",
+            borderRadius: isMobile ? 12 : 20,
+            padding: isMobile ? "10px 12px" : "14px 16px",
             background: "rgba(251,113,133,0.08)",
             border: "1px solid rgba(251,113,133,0.18)",
             color: "var(--app-danger)",
+            fontSize: isMobile ? 12 : 14,
           }}
         >
           {error}
         </div>
       )}
 
-      <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
+      <section style={{ 
+        display: "grid", 
+        gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(220px, 1fr))", 
+        gap: isMobile ? 12 : 16,
+      }}>
         <DashboardCard
           title="Người dùng đã đăng ký"
           value={String(persons.length)}
@@ -294,38 +347,42 @@ export function Dashboard() {
         />
       </section>
 
-      <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20 }}>
+      <section style={{ 
+        display: "grid", 
+        gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(320px, 1fr))", 
+        gap: isMobile ? 16 : 20,
+      }}>
         <div
           style={{
-            borderRadius: 28,
-            padding: 22,
+            borderRadius: isMobile ? 16 : 28,
+            padding: isMobile ? 16 : 22,
             background: "var(--app-surface)",
             border: "1px solid var(--app-border)",
             boxShadow: "var(--app-shadow)",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 18 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: isMobile ? 14 : 18, flexDirection: isMobile ? "column" : "row" }}>
             <div>
-              <div style={{ fontSize: 18, fontWeight: 600 }}>Nhận diện theo 24 giờ</div>
-              <div style={{ fontSize: 13, color: "var(--app-muted)", marginTop: 4 }}>
+              <div style={{ fontSize: isMobile ? 16 : 18, fontWeight: 600 }}>Nhận diện theo 24 giờ</div>
+              <div style={{ fontSize: isMobile ? 11 : 13, color: "var(--app-muted)", marginTop: 4 }}>
                 Gồm nhận diện thành công, từ chối và người lạ.
               </div>
             </div>
-            <div style={{ display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: isMobile ? 8 : 10, alignItems: "flex-start", flexWrap: "wrap" }}>
               {[
                 { label: "Nhận diện", color: "var(--app-accent-strong)" },
                 { label: "Từ chối", color: "var(--app-danger)" },
                 { label: "Người lạ", color: "var(--app-warm)" },
               ].map((item) => (
-                <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--app-muted)" }}>
-                  <div style={{ width: 8, height: 8, borderRadius: 999, background: item.color }} />
+                <div key={item.label} style={{ display: "flex", alignItems: "center", gap: isMobile ? 4 : 6, fontSize: isMobile ? 10 : 12, color: "var(--app-muted)" }}>
+                  <div style={{ width: isMobile ? 6 : 8, height: isMobile ? 6 : 8, borderRadius: 999, background: item.color }} />
                   {item.label}
                 </div>
               ))}
             </div>
           </div>
 
-          <div style={{ width: "100%", height: 260 }}>
+          <div style={{ width: "100%", height: isMobile ? 220 : 260 }}>
             <ResponsiveContainer>
               <AreaChart data={statistics.hourlyData}>
                 <defs>
@@ -343,8 +400,8 @@ export function Dashboard() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="4 4" stroke="rgba(148, 163, 184, 0.08)" />
-                <XAxis dataKey="time" tick={{ fill: "#8ea2bd", fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: "#8ea2bd", fontSize: 11 }} axisLine={false} tickLine={false} />
+                <XAxis dataKey="time" tick={{ fill: "#8ea2bd", fontSize: isMobile ? 9 : 11 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: "#8ea2bd", fontSize: isMobile ? 9 : 11 }} axisLine={false} tickLine={false} />
                 <Tooltip content={tooltip} />
                 <Area type="monotone" dataKey="recognized" stroke="var(--app-accent-strong)" strokeWidth={2} fill="url(#dashboard-recognition)" />
                 <Area type="monotone" dataKey="denied" stroke="var(--app-danger)" strokeWidth={2} fill="url(#dashboard-denied)" />
@@ -354,34 +411,34 @@ export function Dashboard() {
           </div>
         </div>
 
-        <div style={{ display: "grid", gap: 20 }}>
+        <div style={{ display: "grid", gap: isMobile ? 16 : 20 }}>
           <div
             style={{
-              borderRadius: 28,
-              padding: 22,
+              borderRadius: isMobile ? 16 : 28,
+              padding: isMobile ? 16 : 22,
               background: "var(--app-surface)",
               border: "1px solid var(--app-border)",
               boxShadow: "var(--app-shadow)",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
-              <CalendarClock size={18} color="var(--app-warm)" />
+            <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 10, marginBottom: isMobile ? 14 : 18 }}>
+              <CalendarClock size={isMobile ? 16 : 18} color="var(--app-warm)" />
               <div>
-                <div style={{ fontSize: 18, fontWeight: 600 }}>Tần suất theo tuần</div>
-                <div style={{ fontSize: 13, color: "var(--app-muted)", marginTop: 4 }}>
+                <div style={{ fontSize: isMobile ? 16 : 18, fontWeight: 600 }}>Tần suất theo tuần</div>
+                <div style={{ fontSize: isMobile ? 11 : 13, color: "var(--app-muted)", marginTop: 4 }}>
                   Theo log nhận diện thành công đã lưu.
                 </div>
               </div>
             </div>
 
-            <div style={{ width: "100%", height: 220 }}>
+            <div style={{ width: "100%", height: isMobile ? 180 : 220 }}>
               <ResponsiveContainer>
-                <BarChart data={statistics.weeklyData} barSize={22}>
+                <BarChart data={statistics.weeklyData} barSize={isMobile ? 16 : 22}>
                   <CartesianGrid strokeDasharray="4 4" stroke="rgba(148, 163, 184, 0.08)" vertical={false} />
-                  <XAxis dataKey="day" tick={{ fill: "#8ea2bd", fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: "#8ea2bd", fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <XAxis dataKey="day" tick={{ fill: "#8ea2bd", fontSize: isMobile ? 9 : 11 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: "#8ea2bd", fontSize: isMobile ? 9 : 11 }} axisLine={false} tickLine={false} />
                   <Tooltip content={tooltip} />
-                  <Bar dataKey="value" fill="var(--app-warm)" radius={[8, 8, 0, 0]} />
+                  <Bar dataKey="value" fill="var(--app-warm)" radius={[isMobile ? 4 : 8, isMobile ? 4 : 8, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -389,48 +446,49 @@ export function Dashboard() {
 
           <div
             style={{
-              borderRadius: 28,
-              padding: 22,
+              borderRadius: isMobile ? 16 : 28,
+              padding: isMobile ? 16 : 22,
               background: "var(--app-surface)",
               border: "1px solid var(--app-border)",
               boxShadow: "var(--app-shadow)",
             }}
           >
-            <div style={{ fontSize: 18, fontWeight: 600 }}>Hồ sơ cần chú ý</div>
-            <div style={{ fontSize: 13, color: "var(--app-muted)", marginTop: 4, marginBottom: 18 }}>
+            <div style={{ fontSize: isMobile ? 16 : 18, fontWeight: 600 }}>Hồ sơ cần chú ý</div>
+            <div style={{ fontSize: isMobile ? 11 : 13, color: "var(--app-muted)", marginTop: 4, marginBottom: isMobile ? 14 : 18 }}>
               Ưu tiên kiểm tra hồ sơ hết hạn hoặc đã bị tạm khóa.
             </div>
 
             {flaggedProfiles.length === 0 ? (
-              <div style={{ color: "var(--app-muted)", fontSize: 13 }}>Không có hồ sơ cảnh báo.</div>
+              <div style={{ color: "var(--app-muted)", fontSize: isMobile ? 12 : 13 }}>Không có hồ sơ cảnh báo.</div>
             ) : (
-              <div style={{ display: "grid", gap: 12 }}>
+              <div style={{ display: "grid", gap: isMobile ? 10 : 12 }}>
                 {flaggedProfiles.map((person) => (
                   <div
                     key={person.id}
                     style={{
-                      padding: 14,
-                      borderRadius: 18,
+                      padding: isMobile ? 12 : 14,
+                      borderRadius: isMobile ? 14 : 18,
                       background: "var(--app-bg-subtle)",
                       border: "1px solid var(--app-border)",
                     }}
                   >
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-                      <div>
-                        <div style={{ fontWeight: 600 }}>{person.name}</div>
-                        <div style={{ fontSize: 13, color: "var(--app-muted)", marginTop: 4 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexDirection: isMobile ? "column" : "row" }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 600, fontSize: isMobile ? 13 : 14 }}>{person.name}</div>
+                        <div style={{ fontSize: isMobile ? 11 : 13, color: "var(--app-muted)", marginTop: 4 }}>
                           {person.department || "Chưa có phòng ban"} · {person.role || "Chưa có chức vụ"}
                         </div>
                       </div>
                       <div
                         style={{
-                          alignSelf: "flex-start",
-                          padding: "6px 10px",
+                          alignSelf: isMobile ? "flex-start" : "flex-start",
+                          padding: isMobile ? "4px 8px" : "6px 10px",
                           borderRadius: 999,
-                          fontSize: 12,
+                          fontSize: isMobile ? 10 : 12,
                           border: `1px solid ${person.is_expired ? "rgba(251,113,133,0.2)" : "rgba(245,158,11,0.2)"}`,
                           background: person.is_expired ? "rgba(251,113,133,0.08)" : "rgba(245,158,11,0.08)",
                           color: person.is_expired ? "var(--app-danger)" : "var(--app-warm)",
+                          marginTop: isMobile ? 8 : 0,
                         }}
                       >
                         {person.is_expired ? "Hết hạn" : "Tạm khóa"}
@@ -446,68 +504,71 @@ export function Dashboard() {
 
       <section
         style={{
-          borderRadius: 28,
-          padding: 22,
+          borderRadius: isMobile ? 16 : 28,
+          padding: isMobile ? 16 : 22,
           background: "var(--app-surface)",
           border: "1px solid var(--app-border)",
           boxShadow: "var(--app-shadow)",
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 18 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: isMobile ? 14 : 18, flexDirection: isMobile ? "column" : "row" }}>
           <div>
-            <div style={{ fontSize: 18, fontWeight: 600 }}>Hoạt động gần đây</div>
-            <div style={{ fontSize: 13, color: "var(--app-muted)", marginTop: 4 }}>
+            <div style={{ fontSize: isMobile ? 16 : 18, fontWeight: 600 }}>Hoạt động gần đây</div>
+            <div style={{ fontSize: isMobile ? 11 : 13, color: "var(--app-muted)", marginTop: 4 }}>
               6 sự kiện mới nhất từ bảng `recognition_logs`.
             </div>
           </div>
           <button
             onClick={() => navigate("/activity")}
             style={{
-              padding: "10px 14px",
-              borderRadius: 16,
+              padding: isMobile ? "8px 12px" : "10px 14px",
+              borderRadius: isMobile ? 12 : 16,
               border: "1px solid var(--app-border)",
               background: "var(--app-bg-subtle)",
               color: "var(--app-text)",
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
-              gap: 8,
+              gap: isMobile ? 6 : 8,
+              fontSize: isMobile ? 12 : 13,
+              alignSelf: isMobile ? "stretch" : "auto",
+              justifyContent: "center",
             }}
           >
             Mở nhật ký
-            <ArrowRight size={15} />
+            <ArrowRight size={isMobile ? 13 : 15} />
           </button>
         </div>
 
         {recentLogs.length === 0 ? (
-          <div style={{ fontSize: 13, color: "var(--app-muted)" }}>Chưa có log nhận diện.</div>
+          <div style={{ fontSize: isMobile ? 12 : 13, color: "var(--app-muted)" }}>Chưa có log nhận diện.</div>
         ) : (
-          <div style={{ display: "grid", gap: 12 }}>
+          <div style={{ display: "grid", gap: isMobile ? 10 : 12 }}>
             {recentLogs.map((log) => (
               <div
                 key={log.id}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "minmax(0, 1.2fr) minmax(120px, 0.8fr) minmax(140px, 0.8fr) auto",
-                  gap: 12,
+                  gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1.2fr) minmax(120px, 0.8fr) minmax(140px, 0.8fr) auto",
+                  gap: isMobile ? 8 : 12,
                   alignItems: "center",
-                  padding: 14,
-                  borderRadius: 18,
+                  padding: isMobile ? 12 : 14,
+                  borderRadius: isMobile ? 14 : 18,
                   background: "var(--app-bg-subtle)",
                   border: "1px solid var(--app-border)",
                 }}
               >
                 <div>
-                  <div style={{ fontWeight: 600 }}>{log.name}</div>
-                  <div style={{ fontSize: 13, color: "var(--app-muted)", marginTop: 4 }}>{log.camera}</div>
+                  <div style={{ fontWeight: 600, fontSize: isMobile ? 13 : 14 }}>{log.name}</div>
+                  <div style={{ fontSize: isMobile ? 11 : 13, color: "var(--app-muted)", marginTop: 4 }}>{log.camera}</div>
                 </div>
-                <div style={{ fontSize: 13, color: "var(--app-muted)" }}>{log.date}</div>
-                <div style={{ fontSize: 13, color: "var(--app-muted)" }}>{log.time}</div>
+                <div style={{ fontSize: isMobile ? 11 : 13, color: "var(--app-muted)" }}>{log.date}</div>
+                <div style={{ fontSize: isMobile ? 11 : 13, color: "var(--app-muted)" }}>{log.time}</div>
                 <div
                   style={{
-                    padding: "6px 10px",
+                    padding: isMobile ? "4px 8px" : "6px 10px",
                     borderRadius: 999,
-                    fontSize: 12,
+                    fontSize: isMobile ? 10 : 12,
                     border:
                       log.status === "success"
                         ? "1px solid rgba(52,211,153,0.2)"
@@ -526,6 +587,8 @@ export function Dashboard() {
                         : log.status === "unknown"
                           ? "var(--app-warm)"
                           : "var(--app-danger)",
+                    textAlign: "center",
+                    justifySelf: isMobile ? "flex-start" : "auto",
                   }}
                 >
                   {log.status === "success" ? "Thành công" : log.status === "unknown" ? "Người lạ" : "Lỗi"}

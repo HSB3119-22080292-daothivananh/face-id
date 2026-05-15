@@ -16,6 +16,8 @@ import {
   ChevronRight,
   ScanFace,
   Loader2,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { apiClient, type Person } from "../services/api";
 import { RegisterModal } from "./RegisterModal";
@@ -45,9 +47,13 @@ function formatDateTime(value: string | null | undefined) {
   }
 }
 
-function displayValue(value: string | number | null | undefined) {
-  if (value === null || value === undefined || value === "") {
+function displayValue(value: string | number | null | undefined, hidden: boolean = false) {
+  if (!value) {
     return "--";
+  }
+  
+  if (hidden) {
+    return "••••••••";
   }
 
   return String(value);
@@ -115,10 +121,16 @@ function FieldGrid({
   title,
   icon: Icon,
   fields,
+  hidden,
+  onToggleHidden,
+  showToggle,
 }: {
   title: string;
   icon: any;
   fields: Array<{ label: string; value: string }>;
+  hidden?: boolean;
+  onToggleHidden?: () => void;
+  showToggle?: boolean;
 }) {
   return (
     <section
@@ -129,7 +141,7 @@ function FieldGrid({
         border: "1px solid var(--app-border)",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
         <div
           style={{
             width: 36,
@@ -143,7 +155,28 @@ function FieldGrid({
         >
           <Icon size={16} color="var(--app-accent)" />
         </div>
-        <div style={{ fontSize: 16, fontWeight: 600 }}>{title}</div>
+        <div style={{ fontSize: 16, fontWeight: 600, flex: 1 }}>{title}</div>
+        {showToggle && onToggleHidden && (
+          <button
+            onClick={onToggleHidden}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "6px 12px",
+              borderRadius: 10,
+              border: "1px solid var(--app-border)",
+              background: hidden ? "rgba(245,158,11,0.08)" : "var(--app-surface)",
+              color: hidden ? "var(--app-warm)" : "var(--app-muted)",
+              cursor: "pointer",
+              fontSize: 12,
+              fontWeight: 500,
+            }}
+          >
+            {hidden ? <EyeOff size={14} /> : <Eye size={14} />}
+            {hidden ? "Ẩn thông tin" : "Hiện thông tin"}
+          </button>
+        )}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
@@ -159,7 +192,7 @@ function FieldGrid({
             }}
           >
             <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 8 }}>{field.label}</div>
-            <div style={{ fontSize: 14, color: "var(--app-text-soft)", lineHeight: 1.5, wordBreak: "break-all", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <div style={{ fontSize: 14, color: hidden ? "var(--app-muted)" : "var(--app-text-soft)", lineHeight: 1.5, wordBreak: "break-all", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden", textOverflow: "ellipsis" }}>
               {field.value}
             </div>
           </div>
@@ -510,6 +543,7 @@ export function RegisteredFaces() {
   const [personToDelete, setPersonToDelete] = useState<Person | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [showCCCDInfo, setShowCCCDInfo] = useState(false);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -737,7 +771,7 @@ export function RegisteredFaces() {
         </div>
       </section>
 
-      <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: 20, alignItems: "start" }}>
+      <section style={{ display: "grid", gridTemplateColumns: "1fr", gap: 20, alignItems: "start" }}>
         <div
           style={{
             borderRadius: 28,
@@ -784,7 +818,7 @@ export function RegisteredFaces() {
                         display: "grid",
                         gridTemplateColumns: "minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr) auto",
                         gap: 10,
-                        padding: "10px 18px", // Reduced padding
+                        padding: "10px 18px",
                         border: "none",
                         borderBottom: "1px solid rgba(148,163,184,0.08)",
                         background: isSelected ? "var(--app-accent-subtle)" : "transparent",
@@ -796,8 +830,8 @@ export function RegisteredFaces() {
                       <div style={{ display: "flex", gap: 10, alignItems: "center", minWidth: 0 }}>
                         <div
                           style={{
-                            width: 32, // Smaller avatar
-                            height: 32, // Smaller avatar
+                            width: 32,
+                            height: 32,
                             borderRadius: 10,
                             overflow: "hidden",
                             border: "1px solid rgba(148,163,184,0.16)",
@@ -885,229 +919,218 @@ export function RegisteredFaces() {
           )}
         </div>
 
-        <div style={{ display: "grid", gap: 18 }}>
-          {selectedPerson ? (
-            <>
-              <section
-                style={{
-                  borderRadius: 28,
-                  padding: 22,
-                  background: "var(--app-surface)",
-                  border: "1px solid var(--app-border)",
-                  boxShadow: "var(--app-shadow)",
-                }}
-              >
-                <div style={{ display: "flex", gap: 16, alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap" }}>
-                  <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-                    <div
-                      style={{
-                        width: 72,
-                        height: 72,
-                        borderRadius: 24,
-                        overflow: "hidden",
-                        border: "1px solid rgba(148,163,184,0.18)",
-                        background: "var(--app-bg-subtle)",
-                        flexShrink: 0,
-                      }}
-                    >
-                      {selectedPerson.img ? (
+        {selectedPerson && (
+          <div style={{ display: "grid", gap: 18 }}>
+            <section
+              style={{
+                borderRadius: 28,
+                padding: 22,
+                background: "var(--app-surface)",
+                border: "1px solid var(--app-border)",
+                boxShadow: "var(--app-shadow)",
+              }}
+            >
+              <div style={{ display: "flex", gap: 16, alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+                  <div
+                    style={{
+                      width: 72,
+                      height: 72,
+                      borderRadius: 24,
+                      overflow: "hidden",
+                      border: "1px solid rgba(148,163,184,0.18)",
+                      background: "var(--app-bg-subtle)",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {selectedPerson.img ? (
+                      <ImageWithFallback
+                        src={selectedPerson.img}
+                        alt={selectedPerson.name}
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      />
+                    ) : (
+                      <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center" }}>
+                        <UserRound size={26} color="var(--app-muted)" />
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <div style={{ fontSize: 24, fontWeight: 700, lineHeight: 1.2 }}>{selectedPerson.name}</div>
+                    <div style={{ marginTop: 6, color: "var(--app-muted)", fontSize: 14 }}>
+                      {selectedPerson.role || "Chưa có chức vụ"} · {selectedPerson.department || "Chưa có phòng ban"}
+                    </div>
+                    <div style={{ marginTop: 12 }}>
+                      <StatusBadge person={selectedPerson} />
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button
+                    onClick={() => setPersonToEdit(selectedPerson)}
+                    style={{
+                      minHeight: 42,
+                      padding: "0 14px",
+                      borderRadius: 16,
+                      border: "1px solid var(--app-border)",
+                      background: "var(--app-bg-subtle)",
+                      color: "var(--app-text)",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                  >
+                    <PencilLine size={15} />
+                    Sửa
+                  </button>
+                  <button
+                    onClick={() => setPersonToDelete(selectedPerson)}
+                    style={{
+                      minHeight: 42,
+                      padding: "0 14px",
+                      borderRadius: 16,
+                      border: "1px solid rgba(251,113,133,0.18)",
+                      background: "rgba(251,113,133,0.12)",
+                      color: "var(--app-danger)",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                  >
+                    <Trash2 size={15} />
+                    Xóa
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ marginTop: 18, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
+                <div style={{ padding: 14, borderRadius: 18, background: "var(--app-bg-subtle)", border: "1px solid var(--app-border)" }}>
+                  <div style={{ fontSize: 12, color: "var(--app-muted)" }}>Embeddings</div>
+                  <div style={{ marginTop: 8, fontSize: 22, fontWeight: 700 }}>{selectedPerson.embeddings}</div>
+                </div>
+                <div style={{ padding: 14, borderRadius: 18, background: "var(--app-bg-subtle)", border: "1px solid var(--app-border)" }}>
+                  <div style={{ fontSize: 12, color: "var(--app-muted)" }}>Lượt nhận diện</div>
+                  <div style={{ marginTop: 8, fontSize: 22, fontWeight: 700 }}>{selectedPerson.recognitions}</div>
+                </div>
+                <div style={{ padding: 14, borderRadius: 18, background: "var(--app-bg-subtle)", border: "1px solid var(--app-border)" }}>
+                  <div style={{ fontSize: 12, color: "var(--app-muted)" }}>Ngày đăng ký</div>
+                  <div style={{ marginTop: 8, fontSize: 16, fontWeight: 600 }}>{formatDate(selectedPerson.registered_at)}</div>
+                </div>
+              </div>
+            </section>
+
+            <FieldGrid
+              title="Hồ sơ cơ bản"
+              icon={UserRound}
+              fields={[
+                { label: "ID người dùng", value: displayValue(selectedPerson.id) },
+                { label: "Tên hệ thống", value: displayValue(selectedPerson.name) },
+                { label: "Tên theo CCCD", value: displayValue(selectedPerson.full_name) },
+                { label: "Chức vụ", value: displayValue(selectedPerson.role) },
+                { label: "Phòng ban", value: displayValue(selectedPerson.department) },
+                { label: "Trạng thái DB", value: selectedPerson.status === "active" ? "active" : "inactive" },
+                { label: "Hết hạn làm việc", value: formatDate(selectedPerson.work_expiry_date) },
+                { label: "Đăng ký lúc", value: formatDateTime(selectedPerson.registered_at) },
+                { label: "Cập nhật lúc", value: formatDateTime(selectedPerson.updated_at) },
+              ]}
+            />
+
+            <FieldGrid
+              title="Thông tin CCCD"
+              icon={CreditCard}
+              hidden={!showCCCDInfo}
+              showToggle={true}
+              onToggleHidden={() => setShowCCCDInfo(!showCCCDInfo)}
+              fields={[
+                { label: "ID bản ghi CCCD", value: displayValue(selectedPerson.citizen_id_record_id, !showCCCDInfo) },
+                { label: "Số CCCD", value: displayValue(selectedPerson.id_number, !showCCCDInfo) },
+                { label: "Ngày sinh", value: displayValue(selectedPerson.dob, !showCCCDInfo) },
+                { label: "Giới tính", value: displayValue(selectedPerson.gender, !showCCCDInfo) },
+                { label: "Quốc tịch", value: displayValue(selectedPerson.nationality, !showCCCDInfo) },
+                { label: "Quê quán", value: displayValue(selectedPerson.hometown, !showCCCDInfo) },
+                { label: "Địa chỉ", value: displayValue(selectedPerson.address, !showCCCDInfo) },
+                { label: "Ngày cấp", value: displayValue(selectedPerson.issue_date, !showCCCDInfo) },
+                { label: "Hạn CCCD", value: displayValue(selectedPerson.expiry_date, !showCCCDInfo) },
+                { label: "Đặc điểm nhận dạng", value: displayValue(selectedPerson.special_features, !showCCCDInfo) },
+                { label: "Tạo bản ghi CCCD", value: formatDateTime(selectedPerson.citizen_created_at) },
+                { label: "Cập nhật bản ghi CCCD", value: formatDateTime(selectedPerson.citizen_updated_at) },
+              ]}
+            />
+
+            <FieldGrid
+              title="Metadata hệ thống (Base64)"
+              icon={Database}
+              fields={[
+                { label: "Ảnh đại diện", value: displayValue(selectedPerson.img_url) },
+                { label: "CCCD mặt trước", value: displayValue(selectedPerson.cccd_front_img) },
+                { label: "CCCD mặt sau", value: displayValue(selectedPerson.cccd_back_img) },
+              ]}
+            />
+
+            <section
+              style={{
+                borderRadius: 24,
+                padding: 20,
+                background: "var(--app-bg-subtle)",
+                border: "1px solid var(--app-border)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                <div
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 12,
+                    background: "rgba(125,211,252,0.08)",
+                    border: "1px solid rgba(125,211,252,0.14)",
+                    display: "grid",
+                    placeItems: "center",
+                  }}
+                >
+                  <FileImage size={16} color="var(--app-accent)" />
+                </div>
+                <div style={{ fontSize: 16, fontWeight: 600 }}>Ảnh lưu trong hệ thống</div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
+                {[
+                  { label: "Ảnh đại diện", src: selectedPerson.img },
+                  { label: "CCCD mặt trước", src: selectedPerson.cccd_front_img },
+                  { label: "CCCD mặt sau", src: selectedPerson.cccd_back_img },
+                ].map((image) => (
+                  <div
+                    key={image.label}
+                    style={{
+                      borderRadius: 20,
+                      overflow: "hidden",
+                      background: "var(--app-surface)",
+                      border: "1px solid rgba(148,163,184,0.12)",
+                    }}
+                  >
+                    <div style={{ aspectRatio: "4 / 3", background: "var(--app-bg-subtle)" }}>
+                      {image.src ? (
                         <ImageWithFallback
-                          src={selectedPerson.img}
-                          alt={selectedPerson.name}
+                          src={image.src}
+                          alt={image.label}
                           style={{ width: "100%", height: "100%", objectFit: "cover" }}
                         />
                       ) : (
-                        <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center" }}>
-                          <UserRound size={26} color="var(--app-muted)" />
+                        <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", color: "var(--app-muted)" }}>
+                          Không có ảnh
                         </div>
                       )}
                     </div>
-
-                    <div>
-                      <div style={{ fontSize: 24, fontWeight: 700, lineHeight: 1.2 }}>{selectedPerson.name}</div>
-                      <div style={{ marginTop: 6, color: "var(--app-muted)", fontSize: 14 }}>
-                        {selectedPerson.role || "Chưa có chức vụ"} · {selectedPerson.department || "Chưa có phòng ban"}
-                      </div>
-                      <div style={{ marginTop: 12 }}>
-                        <StatusBadge person={selectedPerson} />
-                      </div>
-                    </div>
+                    <div style={{ padding: 12, fontSize: 13, color: "var(--app-text-soft)" }}>{image.label}</div>
                   </div>
-
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <button
-                      onClick={() => setPersonToEdit(selectedPerson)}
-                      style={{
-                        minHeight: 42,
-                        padding: "0 14px",
-                        borderRadius: 16,
-                        border: "1px solid var(--app-border)",
-                        background: "var(--app-bg-subtle)",
-                        color: "var(--app-text)",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                      }}
-                    >
-                      <PencilLine size={15} />
-                      Sửa
-                    </button>
-                    <button
-                      onClick={() => setPersonToDelete(selectedPerson)}
-                      style={{
-                        minHeight: 42,
-                        padding: "0 14px",
-                        borderRadius: 16,
-                        border: "1px solid rgba(251,113,133,0.18)",
-                        background: "rgba(251,113,133,0.12)",
-                        color: "var(--app-danger)",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                      }}
-                    >
-                      <Trash2 size={15} />
-                      Xóa
-                    </button>
-                  </div>
-                </div>
-
-                <div style={{ marginTop: 18, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
-                  <div style={{ padding: 14, borderRadius: 18, background: "var(--app-bg-subtle)", border: "1px solid var(--app-border)" }}>
-                    <div style={{ fontSize: 12, color: "var(--app-muted)" }}>Embeddings</div>
-                    <div style={{ marginTop: 8, fontSize: 22, fontWeight: 700 }}>{selectedPerson.embeddings}</div>
-                  </div>
-                  <div style={{ padding: 14, borderRadius: 18, background: "var(--app-bg-subtle)", border: "1px solid var(--app-border)" }}>
-                    <div style={{ fontSize: 12, color: "var(--app-muted)" }}>Lượt nhận diện</div>
-                    <div style={{ marginTop: 8, fontSize: 22, fontWeight: 700 }}>{selectedPerson.recognitions}</div>
-                  </div>
-                  <div style={{ padding: 14, borderRadius: 18, background: "var(--app-bg-subtle)", border: "1px solid var(--app-border)" }}>
-                    <div style={{ fontSize: 12, color: "var(--app-muted)" }}>Ngày đăng ký</div>
-                    <div style={{ marginTop: 8, fontSize: 16, fontWeight: 600 }}>{formatDate(selectedPerson.registered_at)}</div>
-                  </div>
-                </div>
-              </section>
-
-              <FieldGrid
-                title="Hồ sơ cơ bản"
-                icon={UserRound}
-                fields={[
-                  { label: "ID người dùng", value: displayValue(selectedPerson.id) },
-                  { label: "Tên hệ thống", value: displayValue(selectedPerson.name) },
-                  { label: "Tên theo CCCD", value: displayValue(selectedPerson.full_name) },
-                  { label: "Chức vụ", value: displayValue(selectedPerson.role) },
-                  { label: "Phòng ban", value: displayValue(selectedPerson.department) },
-                  { label: "Trạng thái DB", value: selectedPerson.status === "active" ? "active" : "inactive" },
-                  { label: "Hết hạn làm việc", value: formatDate(selectedPerson.work_expiry_date) },
-                  { label: "Đăng ký lúc", value: formatDateTime(selectedPerson.registered_at) },
-                  { label: "Cập nhật lúc", value: formatDateTime(selectedPerson.updated_at) },
-                ]}
-              />
-
-              <FieldGrid
-                title="Thông tin CCCD"
-                icon={CreditCard}
-                fields={[
-                  { label: "ID bản ghi CCCD", value: displayValue(selectedPerson.citizen_id_record_id) },
-                  { label: "Số CCCD", value: displayValue(selectedPerson.id_number) },
-                  { label: "Ngày sinh", value: displayValue(selectedPerson.dob) },
-                  { label: "Giới tính", value: displayValue(selectedPerson.gender) },
-                  { label: "Quốc tịch", value: displayValue(selectedPerson.nationality) },
-                  { label: "Quê quán", value: displayValue(selectedPerson.hometown) },
-                  { label: "Địa chỉ", value: displayValue(selectedPerson.address) },
-                  { label: "Ngày cấp", value: displayValue(selectedPerson.issue_date) },
-                  { label: "Hạn CCCD", value: displayValue(selectedPerson.expiry_date) },
-                  { label: "Đặc điểm nhận dạng", value: displayValue(selectedPerson.special_features) },
-                  { label: "Tạo bản ghi CCCD", value: formatDateTime(selectedPerson.citizen_created_at) },
-                  { label: "Cập nhật bản ghi CCCD", value: formatDateTime(selectedPerson.citizen_updated_at) },
-                ]}
-              />
-
-              <FieldGrid
-                title="Metadata hệ thống (Base64)"
-                icon={Database}
-                fields={[
-                  { label: "Ảnh đại diện", value: displayValue(selectedPerson.img_url) },
-                  { label: "CCCD mặt trước", value: displayValue(selectedPerson.cccd_front_img) },
-                  { label: "CCCD mặt sau", value: displayValue(selectedPerson.cccd_back_img) },
-                ]}
-              />
-
-              <section
-                style={{
-                  borderRadius: 24,
-                  padding: 20,
-                  background: "var(--app-bg-subtle)",
-                  border: "1px solid var(--app-border)",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-                  <div
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 12,
-                      background: "rgba(125,211,252,0.08)",
-                      border: "1px solid rgba(125,211,252,0.14)",
-                      display: "grid",
-                      placeItems: "center",
-                    }}
-                  >
-                    <FileImage size={16} color="var(--app-accent)" />
-                  </div>
-                  <div style={{ fontSize: 16, fontWeight: 600 }}>Ảnh lưu trong hệ thống</div>
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
-                  {[
-                    { label: "Ảnh đại diện", src: selectedPerson.img },
-                    { label: "CCCD mặt trước", src: selectedPerson.cccd_front_img },
-                    { label: "CCCD mặt sau", src: selectedPerson.cccd_back_img },
-                  ].map((image) => (
-                    <div
-                      key={image.label}
-                      style={{
-                        borderRadius: 20,
-                        overflow: "hidden",
-                        background: "var(--app-surface)",
-                        border: "1px solid rgba(148,163,184,0.12)",
-                      }}
-                    >
-                      <div style={{ aspectRatio: "4 / 3", background: "var(--app-bg-subtle)" }}>
-                        {image.src ? (
-                          <ImageWithFallback
-                            src={image.src}
-                            alt={image.label}
-                            style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                          />
-                        ) : (
-                          <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", color: "var(--app-muted)" }}>
-                            Không có ảnh
-                          </div>
-                        )}
-                      </div>
-                      <div style={{ padding: 12, fontSize: 13, color: "var(--app-text-soft)" }}>{image.label}</div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            </>
-          ) : (
-            <div
-              style={{
-                borderRadius: 28,
-                padding: 28,
-                background: "var(--app-surface)",
-                border: "1px solid var(--app-border)",
-                color: "var(--app-muted)",
-              }}
-            >
-              Chọn một hồ sơ ở danh sách bên trái để xem đầy đủ thông tin database.
-            </div>
-          )}
-        </div>
+                ))}
+              </div>
+            </section>
+          </div>
+        )}
       </section>
 
       <AnimatePresence>

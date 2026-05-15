@@ -11,9 +11,13 @@ import {
   Users,
   Menu,
   X,
+  Cloud,
+  Sun,
+  CloudRain,
+  CloudSnow,
+  Clock,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useWindowSize } from "usehooks-ts"; // Let's check if usehooks-ts is available, if not we'll write a simple hook. Wait, it's safer to just write a simple hook or use CSS media queries.
 
 const navItems = [
   { path: "/", label: "Tổng quan", icon: LayoutDashboard, end: true },
@@ -22,42 +26,115 @@ const navItems = [
   { path: "/activity", label: "Nhật ký", icon: Activity },
 ];
 
-const pageMeta: Record<string, { eyebrow: string; title: string; description: string }> = {
-  "/": {
-    eyebrow: "Bảng điều khiển",
-    title: "Tập trung vào dữ liệu thật",
-    description: "Tổng hợp đăng ký, nhận diện và các hồ sơ cần theo dõi từ database.",
-  },
-  "/live": {
-    eyebrow: "Camera",
-    title: "Nhận diện trực tiếp",
-    description: "Theo dõi camera theo thời gian thực và phản hồi tức thì từ backend nhận diện.",
-  },
-  "/faces": {
-    eyebrow: "Hồ sơ",
-    title: "Người dùng và dữ liệu CCCD",
-    description: "Hiển thị đầy đủ thông tin đã lưu trong database, ưu tiên tra cứu và kiểm soát hồ sơ.",
-  },
-  "/activity": {
-    eyebrow: "Lịch sử",
-    title: "Nhật ký hoạt động",
-    description: "Xem lại các lượt nhận diện, người lạ và trạng thái hệ thống theo thời gian.",
-  },
-};
+// ─── CUSTOM HOOK: Real-time Clock ──────────────────────────────────────────
+function useCurrentTime() {
+  const [time, setTime] = useState(new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  return time;
+}
+
+// ─── CUSTOM HOOK: Weather API (OpenWeatherMap) ─────────────────────────────
+function useWeather(location: string = "Hanoi,VN") {
+  const [weather, setWeather] = useState<{
+    temp: number;
+    condition: string;
+    icon: any;
+    humidity: number;
+    location: string;
+    loading: boolean;
+    error: string | null;
+  }>({
+    temp: 0,
+    condition: "",
+    icon: Sun,
+    humidity: 0,
+    location: "",
+    loading: true,
+    error: null,
+  });
+
+  useEffect(() => {
+    const apiKey = import.meta.env?.VITE_WEATHER_API_KEY;
+    if (!apiKey) {
+      setWeather({
+        temp: 28,
+        condition: "Nắng nhẹ",
+        icon: Sun,
+        humidity: 65,
+        location: "Hà Nội",
+        loading: false,
+        error: null,
+      });
+      return;
+    }
+
+    const fetchWeather = async () => {
+      try {
+        const res = await fetch(
+          `https://api.openweathermap.org/data/2.5/weather?q=${location}&appid=${apiKey}&units=metric&lang=vi`
+        );
+        if (!res.ok) throw new Error("Không thể lấy dữ liệu thời tiết");
+        const data = await res.json();
+        
+        const main = data.weather[0].main.toLowerCase();
+        let icon = Sun;
+        if (main.includes("cloud")) icon = Cloud;
+        else if (main.includes("rain") || main.includes("drizzle")) icon = CloudRain;
+        else if (main.includes("snow")) icon = CloudSnow;
+        else if (main.includes("clear")) icon = Sun;
+
+        setWeather({
+          temp: Math.round(data.main.temp),
+          condition: data.weather[0].description,
+          icon,
+          humidity: data.main.humidity,
+          location: data.name,
+          loading: false,
+          error: null,
+        });
+      } catch (err) {
+        setWeather((prev) => ({
+          ...prev,
+          loading: false,
+          error: err instanceof Error ? err.message : "Lỗi không xác định",
+        }));
+      }
+    };
+
+    fetchWeather();
+    const interval = setInterval(fetchWeather, 600000);
+    return () => clearInterval(interval);
+  }, [location]);
+
+  return weather;
+}
 
 export function Layout() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
+  const currentTime = useCurrentTime();
+  const weather = useWeather("Hanoi,VN");
 
-  const currentMeta = pageMeta[location.pathname] ?? pageMeta["/"];
+  const timeString = currentTime.toLocaleTimeString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+  const dateString = currentTime.toLocaleDateString("vi-VN", {
+    weekday: "short",
+    day: "2-digit",
+    month: "2-digit",
+  });
 
-  // Close mobile menu on route change
   useEffect(() => {
     setMobileOpen(false);
   }, [location.pathname]);
 
-  // Handle responsive sidebar behavior via resize listener
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth < 768) {
@@ -75,7 +152,7 @@ export function Layout() {
         display: "flex",
         color: "var(--app-text)",
         position: "relative",
-        overflowX: "hidden", // Prevent horizontal scroll on mobile
+        overflowX: "hidden",
       }}
     >
       <div
@@ -90,7 +167,6 @@ export function Layout() {
         }}
       />
 
-      {/* Mobile Overlay */}
       <AnimatePresence>
         {mobileOpen && (
           <motion.div
@@ -114,7 +190,7 @@ export function Layout() {
           width: collapsed ? 92 : 288,
           x: typeof window !== "undefined" && window.innerWidth < 768 ? (mobileOpen ? 0 : -300) : 0,
         }}
-        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }} // Spring-like feel
+        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
         style={{
           position: typeof window !== "undefined" && window.innerWidth < 768 ? "fixed" : "relative",
           top: 0,
@@ -126,7 +202,7 @@ export function Layout() {
           flexDirection: "column",
           padding: 20,
           borderRight: "1px solid var(--app-border)",
-          background: "rgba(255, 255, 255, 0.95)", // More opaque for mobile visibility
+          background: "rgba(255, 255, 255, 0.95)",
           backdropFilter: "blur(20px)",
         }}
       >
@@ -170,7 +246,6 @@ export function Layout() {
                   </div>
                   <div style={{ fontSize: 18, fontWeight: 700, marginTop: 2 }}>Console</div>
                 </div>
-                {/* Close button for mobile */}
                 {typeof window !== "undefined" && window.innerWidth < 768 && (
                   <button onClick={() => setMobileOpen(false)} style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--app-muted)" }}>
                     <X size={20} />
@@ -180,8 +255,6 @@ export function Layout() {
             )}
           </AnimatePresence>
         </div>
-
-
 
         <nav style={{ marginTop: 20, display: "grid", gap: 8 }}>
           {navItems.map((item) => (
@@ -253,54 +326,125 @@ export function Layout() {
         <header
           style={{
             display: "flex",
-            justifyContent: "flex-start",
-            gap: 16,
+            justifyContent: "space-between",
             alignItems: "center",
-            padding: typeof window !== "undefined" && window.innerWidth < 768 ? "16px 20px" : "28px 36px 20px",
+            padding: typeof window !== "undefined" && window.innerWidth < 768 ? "12px 16px" : "28px 36px 20px",
             borderBottom: "1px solid var(--app-border)",
             background: "rgba(255, 255, 255, 0.8)",
             backdropFilter: "blur(16px)",
             position: "sticky",
             top: 0,
             zIndex: 10,
+            gap: 12,
+            flexWrap: "wrap",
           }}
         >
-          {typeof window !== "undefined" && window.innerWidth < 768 && (
-            <button 
-              onClick={() => setMobileOpen(true)}
-              style={{
-                background: "transparent",
-                border: "none",
-                cursor: "pointer",
-                padding: "8px",
-                marginRight: "4px",
-                display: "grid",
-                placeItems: "center",
-                color: "var(--app-text)"
-              }}
-            >
-              <Menu size={24} />
-            </button>
-          )}
-          
-          <div>
-            <motion.div 
-              initial={{ opacity: 0, y: -5 }} 
-              animate={{ opacity: 1, y: 0 }} 
-              transition={{ duration: 0.3 }}
-              style={{ fontSize: typeof window !== "undefined" && window.innerWidth < 768 ? 22 : 28, fontWeight: 700, lineHeight: 1.2, color: "var(--app-text)" }}
-            >
-              {currentMeta.title}
-            </motion.div>
-            <motion.div 
-              initial={{ opacity: 0 }} 
-              animate={{ opacity: 1 }} 
-              transition={{ duration: 0.4, delay: 0.1 }}
-              style={{ fontSize: 14, color: "var(--app-muted)", marginTop: 6 }}
-            >
-              {currentMeta.description}
-            </motion.div>
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            {typeof window !== "undefined" && window.innerWidth < 768 && (
+              <button 
+                onClick={() => setMobileOpen(true)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: "8px",
+                  display: "grid",
+                  placeItems: "center",
+                  color: "var(--app-text)",
+                }}
+              >
+                <Menu size={24} />
+              </button>
+            )}
           </div>
+
+          <motion.div 
+            initial={{ opacity: 0, x: 20 }} 
+            animate={{ opacity: 1, x: 0 }} 
+            transition={{ duration: 0.4 }}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              flexShrink: 0,
+              flexWrap: "wrap",
+              justifyContent: "flex-end",
+            }}
+          >
+            <div style={{ 
+              display: "flex", 
+              alignItems: "center", 
+              gap: 8,
+              padding: "8px 12px",
+              background: "var(--app-surface, #f8fafc)",
+              borderRadius: 12,
+              border: "1px solid var(--app-border, #e2e8f0)",
+              whiteSpace: "nowrap",
+            }}>
+              <Clock size={16} color="var(--app-muted, #64748b)" />
+              <div style={{ textAlign: "right" }}>
+                <div style={{ 
+                  fontSize: 15, 
+                  fontWeight: 600, 
+                  fontFamily: "'JetBrains Mono', monospace",
+                  color: "var(--app-text, #1e293b)",
+                  lineHeight: 1,
+                }}>
+                  {timeString}
+                </div>
+                <div style={{ 
+                  fontSize: 11, 
+                  color: "var(--app-muted, #64748b)",
+                  lineHeight: 1,
+                }}>
+                  {dateString}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ 
+              display: "flex", 
+              alignItems: "center", 
+              gap: 8,
+              padding: "8px 12px",
+              background: "var(--app-surface, #f8fafc)",
+              borderRadius: 12,
+              border: "1px solid var(--app-border, #e2e8f0)",
+              minWidth: 140,
+              whiteSpace: "nowrap",
+            }}>
+              {weather.loading ? (
+                <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }}>
+                  <Cloud size={18} color="var(--app-muted, #64748b)" />
+                </motion.div>
+              ) : weather.error ? (
+                <Cloud size={18} color="#ef4444" />
+              ) : (
+                <weather.icon size={18} color="#f59e0b" />
+              )}
+              <div style={{ textAlign: "right", minWidth: 70 }}>
+                <div style={{ 
+                  fontSize: 15, 
+                  fontWeight: 600,
+                  color: "var(--app-text, #1e293b)",
+                  lineHeight: 1,
+                }}>
+                  {weather.loading ? "--" : `${weather.temp}°C`}
+                </div>
+                <div style={{ 
+                  fontSize: 11, 
+                  color: "var(--app-muted, #64748b)",
+                  lineHeight: 1,
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  maxWidth: 90,
+                }}>
+                  {weather.loading ? "Đang tải..." : weather.error ? "Lỗi API" : weather.condition}
+                </div>
+              </div>
+            </div>
+          </motion.div>
         </header>
 
         <main style={{ flex: 1, overflow: "auto" }}>
