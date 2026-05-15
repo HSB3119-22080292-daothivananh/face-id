@@ -17,6 +17,7 @@ def sharpen(img: np.ndarray, factor: float):
     return cv2.cvtColor(np.array(enhancer), cv2.COLOR_RGB2BGR)
 
 def correct_skew(image: np.ndarray, delta=1, limit=5):
+    if image is None: return None
     def determine_score(arr, angle):
         data = inter.rotate(arr, angle, reshape=False, order=0)
         histogram = np.sum(data, axis=1, dtype=float)
@@ -24,6 +25,8 @@ def correct_skew(image: np.ndarray, delta=1, limit=5):
         return histogram, score
 
     img_new = sharpen(image, 100)
+    if img_new is None:
+        img_new = image
     img_new = imutils.resize(img_new, height=680)
     gray = cv2.cvtColor(img_new, cv2.COLOR_BGR2GRAY)
     thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]

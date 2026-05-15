@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Outlet, NavLink, useLocation } from "react-router";
 import {
   Activity,
@@ -9,8 +9,11 @@ import {
   LayoutDashboard,
   ScanFace,
   Users,
+  Menu,
+  X,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
+import { useWindowSize } from "usehooks-ts"; // Let's check if usehooks-ts is available, if not we'll write a simple hook. Wait, it's safer to just write a simple hook or use CSS media queries.
 
 const navItems = [
   { path: "/", label: "Tổng quan", icon: LayoutDashboard, end: true },
@@ -44,14 +47,26 @@ const pageMeta: Record<string, { eyebrow: string; title: string; description: st
 
 export function Layout() {
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
 
   const currentMeta = pageMeta[location.pathname] ?? pageMeta["/"];
-  const todayLabel = new Intl.DateTimeFormat("vi-VN", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  }).format(new Date());
+
+  // Close mobile menu on route change
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname]);
+
+  // Handle responsive sidebar behavior via resize listener
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 768) {
+        setCollapsed(false);
+      }
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   return (
     <div
@@ -60,6 +75,7 @@ export function Layout() {
         display: "flex",
         color: "var(--app-text)",
         position: "relative",
+        overflowX: "hidden", // Prevent horizontal scroll on mobile
       }}
     >
       <div
@@ -74,18 +90,43 @@ export function Layout() {
         }}
       />
 
+      {/* Mobile Overlay */}
+      <AnimatePresence>
+        {mobileOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setMobileOpen(false)}
+            style={{
+              position: "fixed",
+              inset: 0,
+              backgroundColor: "rgba(15, 23, 42, 0.4)",
+              backdropFilter: "blur(4px)",
+              zIndex: 40,
+            }}
+          />
+        )}
+      </AnimatePresence>
+
       <motion.aside
-        animate={{ width: collapsed ? 92 : 288 }}
-        transition={{ duration: 0.24, ease: "easeInOut" }}
+        animate={{ 
+          width: collapsed ? 92 : 288,
+          x: typeof window !== "undefined" && window.innerWidth < 768 ? (mobileOpen ? 0 : -300) : 0,
+        }}
+        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }} // Spring-like feel
         style={{
-          position: "relative",
-          zIndex: 1,
+          position: typeof window !== "undefined" && window.innerWidth < 768 ? "fixed" : "relative",
+          top: 0,
+          bottom: 0,
+          left: 0,
+          zIndex: 50,
           flexShrink: 0,
           display: "flex",
           flexDirection: "column",
           padding: 20,
           borderRight: "1px solid var(--app-border)",
-          background: "rgba(255, 255, 255, 0.86)",
+          background: "rgba(255, 255, 255, 0.95)", // More opaque for mobile visibility
           backdropFilter: "blur(20px)",
         }}
       >
@@ -120,57 +161,27 @@ export function Layout() {
                 initial={{ opacity: 0, x: -8 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -8 }}
-                transition={{ duration: 0.18 }}
+                transition={{ duration: 0.2 }}
+                style={{ flex: 1, display: "flex", justifyContent: "space-between", alignItems: "center" }}
               >
-                <div style={{ fontSize: 11, color: "var(--app-accent)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
-                  Face ID Console
+                <div>
+                  <div style={{ fontSize: 11, color: "var(--app-accent)", letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 600 }}>
+                    Face ID
+                  </div>
+                  <div style={{ fontSize: 18, fontWeight: 700, marginTop: 2 }}>Console</div>
                 </div>
-                <div style={{ fontSize: 18, fontWeight: 700, marginTop: 4 }}>Quản trị nhận diện</div>
+                {/* Close button for mobile */}
+                {typeof window !== "undefined" && window.innerWidth < 768 && (
+                  <button onClick={() => setMobileOpen(false)} style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--app-muted)" }}>
+                    <X size={20} />
+                  </button>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
         </div>
 
-        <div
-          style={{
-            marginTop: 16,
-            padding: collapsed ? "10px 8px" : "16px 18px",
-            borderRadius: 22,
-            background: "linear-gradient(180deg, #ffffff, var(--app-bg-subtle))",
-            border: "1px solid var(--app-border)",
-          }}
-        >
-          <AnimatePresence>
-            {!collapsed && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                style={{ display: "grid", gap: 10 }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div
-                    style={{
-                      width: 34,
-                      height: 34,
-                      borderRadius: 12,
-                      background: "var(--app-accent-subtle)",
-                      border: "1px solid var(--app-border)",
-                      display: "grid",
-                      placeItems: "center",
-                    }}
-                  >
-                    <Fingerprint size={16} color="var(--app-accent)" />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>Giao diện tinh gọn</div>
-                    <div style={{ fontSize: 12, color: "var(--app-muted)" }}>Bỏ bớt phần giả lập, ưu tiên dữ liệu DB</div>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+
 
         <nav style={{ marginTop: 20, display: "grid", gap: 8 }}>
           {navItems.map((item) => (
@@ -210,105 +221,85 @@ export function Layout() {
           ))}
         </nav>
 
-        <div style={{ marginTop: "auto", paddingTop: 18 }}>
-          <AnimatePresence>
-            {!collapsed && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                style={{
-                  padding: 16,
-                  borderRadius: 22,
-                  background: "linear-gradient(180deg, #ffffff, var(--app-bg-subtle))",
-                  border: "1px solid var(--app-border)",
-                  color: "var(--app-muted)",
-                  fontSize: 12,
-                  lineHeight: 1.6,
-                }}
-              >
-                Dữ liệu người dùng, ảnh khuôn mặt và CCCD đang lấy từ database hiện tại.
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+        <div style={{ marginTop: "auto" }} />
 
-        <button
-          onClick={() => setCollapsed((value) => !value)}
-          style={{
-            position: "absolute",
-            right: -14,
-            top: 32,
-            width: 28,
-            height: 28,
-            borderRadius: 999,
-            border: "1px solid var(--app-border-strong)",
-            background: "#ffffff",
-            color: "var(--app-text)",
-            display: "grid",
-            placeItems: "center",
-            cursor: "pointer",
-            boxShadow: "var(--app-shadow)",
-          }}
-        >
-          {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-        </button>
+        {typeof window !== "undefined" && window.innerWidth >= 768 && (
+          <motion.button
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => setCollapsed((value) => !value)}
+            style={{
+              position: "absolute",
+              right: -14,
+              top: 32,
+              width: 28,
+              height: 28,
+              borderRadius: 999,
+              border: "1px solid var(--app-border-strong)",
+              background: "#ffffff",
+              color: "var(--app-text)",
+              display: "grid",
+              placeItems: "center",
+              cursor: "pointer",
+              boxShadow: "var(--app-shadow)",
+            }}
+          >
+            {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+          </motion.button>
+        )}
       </motion.aside>
 
       <div style={{ flex: 1, minWidth: 0, position: "relative", zIndex: 1, display: "flex", flexDirection: "column" }}>
         <header
           style={{
             display: "flex",
-            justifyContent: "space-between",
+            justifyContent: "flex-start",
             gap: 16,
             alignItems: "center",
-            padding: "28px 36px 20px",
+            padding: typeof window !== "undefined" && window.innerWidth < 768 ? "16px 20px" : "28px 36px 20px",
             borderBottom: "1px solid var(--app-border)",
-            background: "rgba(255, 255, 255, 0.72)",
+            background: "rgba(255, 255, 255, 0.8)",
             backdropFilter: "blur(16px)",
+            position: "sticky",
+            top: 0,
+            zIndex: 10,
           }}
         >
+          {typeof window !== "undefined" && window.innerWidth < 768 && (
+            <button 
+              onClick={() => setMobileOpen(true)}
+              style={{
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                padding: "8px",
+                marginRight: "4px",
+                display: "grid",
+                placeItems: "center",
+                color: "var(--app-text)"
+              }}
+            >
+              <Menu size={24} />
+            </button>
+          )}
+          
           <div>
-            <div
-              style={{
-                fontSize: 11,
-                color: "var(--app-accent)",
-                textTransform: "uppercase",
-                letterSpacing: "0.14em",
-                marginBottom: 8,
-              }}
+            <motion.div 
+              initial={{ opacity: 0, y: -5 }} 
+              animate={{ opacity: 1, y: 0 }} 
+              transition={{ duration: 0.3 }}
+              style={{ fontSize: typeof window !== "undefined" && window.innerWidth < 768 ? 22 : 28, fontWeight: 700, lineHeight: 1.2, color: "var(--app-text)" }}
             >
-              {currentMeta.eyebrow}
-            </div>
-            <div style={{ fontSize: 28, fontWeight: 700, lineHeight: 1.2 }}>{currentMeta.title}</div>
-            <div style={{ fontSize: 14, color: "var(--app-muted)", marginTop: 6 }}>{currentMeta.description}</div>
-          </div>
-
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
-            <div
-              style={{
-                padding: "10px 14px",
-                borderRadius: 999,
-                border: "1px solid var(--app-border)",
-                background: "#ffffff",
-                fontSize: 12,
-                color: "var(--app-text-soft)",
-              }}
+              {currentMeta.title}
+            </motion.div>
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              transition={{ duration: 0.4, delay: 0.1 }}
+              style={{ fontSize: 14, color: "var(--app-muted)", marginTop: 6 }}
             >
-              {todayLabel}
-            </div>
-            <div
-              style={{
-                padding: "10px 14px",
-                borderRadius: 999,
-                border: "1px solid rgba(5, 150, 105, 0.16)",
-                background: "rgba(5, 150, 105, 0.06)",
-                fontSize: 12,
-                color: "var(--app-success)",
-              }}
-            >
-              Dữ liệu đồng bộ theo API
-            </div>
+              {currentMeta.description}
+            </motion.div>
           </div>
         </header>
 

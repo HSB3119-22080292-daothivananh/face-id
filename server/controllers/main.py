@@ -805,7 +805,7 @@ class CCCDBackSimpleExtractor:
 
     @staticmethod
     def _parse_mrz(lines):
-        """Parse 3 dòng MRZ thành dict (giữ logic cũ)"""
+        """Parse 3 dòng MRZ thành dict (ICAO TD1 format)"""
         result = {
             "mrz_raw": "", "mrz_doc_type": "", "mrz_country": "",
             "mrz_id": "", "mrz_dob": "", "mrz_gender": "",
@@ -814,17 +814,44 @@ class CCCDBackSimpleExtractor:
         if len(lines) < 3:
             return result
 
-        def _clean_mrz_line(raw):
-            cleaned = raw.upper()
-            result["mrz_dob"] = f"{dd}/{mm}/{cc}{yy}"
+        def _clean(raw):
+            c = raw.upper().replace(' ', '<').replace('|', '<')
+            c = re.sub(r'[^A-Z0-9<]', '<', c)
+            return (c + '<' * 30)[:30]
 
-        result["mrz_gender"] = {"M": "Nam", "F": "Nữ", "<": "Không xác định"}.get(gender_raw, gender_raw)
+        l1 = _clean(lines[0])
+        l2 = _clean(lines[1])
+        l3 = _clean(lines[2])
+        result["mrz_raw"] = f"{l1}\n{l2}\n{l3}"
 
-        if re.fullmatch(r'\d{6}', exp_raw):
-            yy, mm, dd = exp_raw[0:2], exp_raw[2:4], exp_raw[4:6]
-            cc = "19" if int(yy) >= 30 else "20"
-            result["mrz_expiry"] = f"{dd}/{mm}/{cc}{yy}"
+        # Line 1: doc_type(2) + country(3) + id(9) + check + optional
+        if len(l1) >= 5:
+            result["mrz_doc_type"] = l1[0:2].replace('<', '').strip()
+            result["mrz_country"] = l1[2:5].replace('<', '').strip()
+        if len(l1) >= 14:
+            id_raw = l1[5:14].replace('<', '')
+            if re.match(r'\d{9}', id_raw):
+                result["mrz_id"] = id_raw[:9]
 
+        # Line 2: dob(6) + check(1) + sex(1) + expiry(6) + ...
+        if len(l2) >= 14:
+            dob_raw = l2[0:6]
+            gender_raw = l2[7] if len(l2) > 7 else ''
+            exp_raw = l2[8:14]
+
+            if re.fullmatch(r'\d{6}', dob_raw):
+                yy, mm, dd = dob_raw[0:2], dob_raw[2:4], dob_raw[4:6]
+                cc = "19" if int(yy) >= 30 else "20"
+                result["mrz_dob"] = f"{dd}/{mm}/{cc}{yy}"
+
+            result["mrz_gender"] = {"M": "Nam", "F": "Nữ"}.get(gender_raw, "")
+
+            if re.fullmatch(r'\d{6}', exp_raw):
+                yy, mm, dd = exp_raw[0:2], exp_raw[2:4], exp_raw[4:6]
+                cc = "19" if int(yy) >= 30 else "20"
+                result["mrz_expiry"] = f"{dd}/{mm}/{cc}{yy}"
+
+        # Line 3: name (LAST<<FIRST<MIDDLE)
         name_field = l3.strip("<")
         if "<<" in name_field:
             parts = name_field.split("<<", 1)
@@ -835,6 +862,7 @@ class CCCDBackSimpleExtractor:
             result["mrz_name"] = name_field.replace("<", " ").strip()
 
         return result
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1068,9 +1096,8 @@ def load_ai_background():
             back_simple_extractor = CCCDBackSimpleExtractor(template_path, ocr_predictor)
             logger.info("[AI_LOADER] Đã khởi tạo CCCDBackSimpleExtractor")
         else:
-            # Fallback về ReadBackInfo cũ nếu không có template
-            read_back = ReadBackInfo(ocr_predictor)
-            logger.warning("[AI_LOADER] Không tìm thấy template, dùng ReadBackInfo cũ")
+            # Fallback về ReadInfo (đã cấu hình sẵn get_back_info)
+            logger.warning("[AI_LOADER] Không tìm thấy template, dùng ReadInfo làm fallback cho mặt sau")
         
         is_ai_ready = True
         logger.info("[AI_LOADER] HOÀN TẤT! Hệ thống AI đã sẵn sàng.")
@@ -1101,7 +1128,7 @@ def _load_embeddings_to_ram():
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
         cursor.execute("""
-            SELECT e.person_id, p.name, p.role, p.img_path,
+            SELECT e.person_id, p.name, p.role, p.img_url,
                    p.work_expiry_date, e.embedding_vector
             FROM face_embeddings e
             JOIN persons p ON e.person_id = p.id
@@ -1115,7 +1142,7 @@ def _load_embeddings_to_ram():
                     "person_id": row["person_id"],
                     "name": row["name"],
                     "role": row.get("role", ""),
-                    "img_path": row.get("img_path", ""),
+                    "img_path": row.get("img_url", ""),
                     "work_expiry_date": str(row["work_expiry_date"]) if row.get("work_expiry_date") else None,
                     "embedding_vector": json.loads(row["embedding_vector"]),
                 })
@@ -1200,12 +1227,8 @@ async def extract_ocr_local(file: UploadFile = File(...), side: str = Form(...))
             }
 
         else:  
-            if back_simple_extractor is not None:
-                raw = back_simple_extractor.extract(temp_path)
-            elif read_back is not None:
-                raw = read_back.get_back_info(temp_path)
-            else:
-                raw = read_info.get_back_info(temp_path)
+            # Dùng scan-based approach (không cần YOLO cho mặt sau)
+            raw = read_info.get_back_info(temp_path)
             
             logger.info(f"[OCR] Mặt sau raw: {raw}")
             mapped_data = {
@@ -1349,28 +1372,28 @@ async def register(
             descriptor = detections[0]["descriptor"]
             emb_id = str(uuid.uuid4())
             
-            if i == 0:
-                user_descriptor = descriptor
-
-            saved_path = face_ai_service.save_image(img_bytes, person_id, index=i)
-            saved_files.append(saved_path)
+            img_b64 = face_ai_service.bytes_to_base64(img_bytes)
             
             if i == 0:
-                avatar_path = saved_path
+                user_descriptor = descriptor
+                avatar_path = "" # keeping this variable so API responses don't break immediately
+                avatar_b64 = img_b64
+                
                 cursor.execute(
                     """INSERT INTO persons 
-                          (id, name, role, department, status, img_path, work_expiry_date)
-                        VALUES (%s, %s, %s, %s, 'active', %s, %s)""",
-                    (person_id, name, role, department, avatar_path, expiry_val),
+                          (id, name, role, department, status, img_url, img_path, work_expiry_date)
+                        VALUES (%s, %s, %s, %s, 'active', %s, '', %s)""",
+                    (person_id, name, role, department, avatar_b64, expiry_val),
                 )
 
             cursor.execute(
-                "INSERT INTO face_embeddings (id, person_id, embedding_vector) VALUES (%s, %s, %s)",
-                (emb_id, person_id, json.dumps(descriptor)),
+                "INSERT INTO face_embeddings (id, person_id, embedding_vector, img_base64) VALUES (%s, %s, %s, %s)",
+                (emb_id, person_id, json.dumps(descriptor), img_b64),
             )
-            new_encodings.append((person_id, name, role, avatar_path, expiry_val, descriptor))
+            new_encodings.append((person_id, name, role, avatar_b64, expiry_val, descriptor))
 
         front_path, back_path = "", ""
+        front_b64, back_b64 = "", ""
 
         if cccd_front:
             fb_bytes = await cccd_front.read()
@@ -1388,24 +1411,22 @@ async def register(
                     logger.warning(f"Cảnh báo giả mạo: Score {score} < {COSINE_THRESHOLD}")
                     raise Exception("Cảnh báo: Khuôn mặt trên thẻ CCCD KHÔNG KHỚP với ảnh chụp trực tiếp!")
 
-                front_path = face_ai_service.save_image(fb_bytes, f"cccd_front_{person_id}", index=0)
-                saved_files.append(front_path)
+                front_b64 = face_ai_service.bytes_to_base64(fb_bytes)
 
         if cccd_back:
             bb_bytes = await cccd_back.read()
             if bb_bytes:
-                back_path = face_ai_service.save_image(bb_bytes, f"cccd_back_{person_id}", index=0)
-                saved_files.append(back_path)
+                back_b64 = face_ai_service.bytes_to_base64(bb_bytes)
 
         cursor.execute("""
             INSERT INTO citizen_ids
-              (id, person_id, front_img_path, back_img_path, 
+              (id, person_id, front_img_path, back_img_path, front_img_base64, back_img_base64,
                id_number, full_name, dob, gender, nationality, 
                hometown, address, expiry_date, issue_date, special_features)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            VALUES (%s,%s,'','',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """, (
             str(uuid.uuid4()), person_id,
-            front_path or None, back_path or None,
+            front_b64 or None, back_b64 or None,
             cccd.get("id_number"), cccd.get("full_name"),
             cccd.get("dob"), cccd.get("gender"),
             cccd.get("nationality", "Việt Nam"),

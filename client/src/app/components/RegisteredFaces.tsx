@@ -12,6 +12,8 @@ import {
   Trash2,
   UserRound,
   X,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { apiClient, type Person } from "../services/api";
 import { RegisterModal } from "./RegisterModal";
@@ -506,6 +508,10 @@ export function RegisteredFaces() {
   const [personToDelete, setPersonToDelete] = useState<Person | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 50;
 
   const loadPersons = async () => {
     try {
@@ -547,18 +553,29 @@ export function RegisteredFaces() {
     });
   }, [persons, search, statusFilter]);
 
+  // Reset to page 1 when filters change
   useEffect(() => {
-    if (filteredPersons.length === 0) {
+    setCurrentPage(1);
+  }, [search, statusFilter]);
+
+  const totalPages = Math.ceil(filteredPersons.length / pageSize);
+  const paginatedPersons = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredPersons.slice(start, start + pageSize);
+  }, [filteredPersons, currentPage, pageSize]);
+
+  useEffect(() => {
+    if (paginatedPersons.length === 0) {
       setSelectedId(null);
       return;
     }
 
-    if (!filteredPersons.some((person) => person.id === selectedId)) {
-      setSelectedId(filteredPersons[0].id);
+    if (!paginatedPersons.some((person) => person.id === selectedId)) {
+      setSelectedId(paginatedPersons[0].id);
     }
-  }, [filteredPersons, selectedId]);
+  }, [paginatedPersons, selectedId]);
 
-  const selectedPerson = filteredPersons.find((person) => person.id === selectedId) ?? null;
+  const selectedPerson = persons.find((person) => person.id === selectedId) ?? null;
 
   const summary = {
     total: persons.length,
@@ -616,32 +633,12 @@ export function RegisteredFaces() {
           display: "flex",
           justifyContent: "space-between",
           gap: 16,
-          alignItems: "flex-start",
+          alignItems: "center",
           flexWrap: "wrap",
         }}
       >
-        <div style={{ maxWidth: 700 }}>
-          <div
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "8px 12px",
-              borderRadius: 999,
-              background: "rgba(125,211,252,0.08)",
-              border: "1px solid rgba(125,211,252,0.16)",
-              color: "var(--app-accent)",
-              fontSize: 12,
-              marginBottom: 14,
-            }}
-          >
-            <Database size={14} />
-            Hồ sơ hiển thị đầy đủ từ bảng `persons` và `citizen_ids`
-          </div>
-          <div style={{ fontSize: 28, fontWeight: 700, lineHeight: 1.2 }}>Quản lý người dùng theo hồ sơ thật, không còn nút thừa</div>
-          <div style={{ marginTop: 10, fontSize: 14, color: "var(--app-muted)", lineHeight: 1.7 }}>
-            Trang này tập trung vào tra cứu, chỉnh sửa và xem chi tiết toàn bộ dữ liệu người dùng đang có trong database, bao gồm thông tin CCCD và đường dẫn ảnh.
-          </div>
+        <div style={{ fontSize: 24, fontWeight: 700, color: "var(--app-text)" }}>
+          Hồ sơ người dùng
         </div>
 
         <button
@@ -775,69 +772,118 @@ export function RegisteredFaces() {
               Không có hồ sơ phù hợp với bộ lọc hiện tại.
             </div>
           ) : (
-            <div style={{ maxHeight: 760, overflow: "auto" }}>
-              {filteredPersons.map((person) => {
-                const isSelected = person.id === selectedId;
+            <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+              <div style={{ flex: 1, overflow: "auto", maxHeight: "calc(100vh - 380px)" }}>
+                {paginatedPersons.map((person) => {
+                  const isSelected = person.id === selectedId;
 
-                return (
-                  <button
-                    key={person.id}
-                    onClick={() => setSelectedId(person.id)}
-                    style={{
-                      width: "100%",
-                      textAlign: "left",
-                      display: "grid",
-                      gridTemplateColumns: "minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr) auto",
-                      gap: 12,
-                      padding: "18px",
-                      border: "none",
-                      borderBottom: "1px solid rgba(148,163,184,0.08)",
-                      background: isSelected ? "rgba(125,211,252,0.08)" : "transparent",
-                      cursor: "pointer",
-                      color: "inherit",
-                    }}
-                  >
-                    <div style={{ display: "flex", gap: 12, alignItems: "center", minWidth: 0 }}>
-                      <div
-                        style={{
-                          width: 44,
-                          height: 44,
-                          borderRadius: 16,
-                          overflow: "hidden",
-                          border: "1px solid rgba(148,163,184,0.16)",
-                          background: "var(--app-bg-subtle)",
-                          flexShrink: 0,
-                        }}
-                      >
-                        {person.img ? (
-                          <ImageWithFallback
-                            src={person.img}
-                            alt={person.name}
-                            style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                          />
-                        ) : (
-                          <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center" }}>
-                            <UserRound size={18} color="var(--app-muted)" />
+                  return (
+                    <button
+                      key={person.id}
+                      onClick={() => setSelectedId(person.id)}
+                      style={{
+                        width: "100%",
+                        textAlign: "left",
+                        display: "grid",
+                        gridTemplateColumns: "minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr) auto",
+                        gap: 10,
+                        padding: "10px 18px", // Reduced padding
+                        border: "none",
+                        borderBottom: "1px solid rgba(148,163,184,0.08)",
+                        background: isSelected ? "var(--app-accent-subtle)" : "transparent",
+                        cursor: "pointer",
+                        color: "inherit",
+                        transition: "background 0.15s",
+                      }}
+                    >
+                      <div style={{ display: "flex", gap: 10, alignItems: "center", minWidth: 0 }}>
+                        <div
+                          style={{
+                            width: 32, // Smaller avatar
+                            height: 32, // Smaller avatar
+                            borderRadius: 10,
+                            overflow: "hidden",
+                            border: "1px solid rgba(148,163,184,0.16)",
+                            background: "var(--app-bg-subtle)",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {person.img ? (
+                            <ImageWithFallback
+                              src={person.img}
+                              alt={person.name}
+                              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                            />
+                          ) : (
+                            <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center" }}>
+                              <UserRound size={16} color="var(--app-muted)" />
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {person.name}
                           </div>
-                        )}
-                      </div>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {person.name}
-                        </div>
-                        <div style={{ marginTop: 4, fontSize: 13, color: "var(--app-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {person.role || "Chưa có chức vụ"}
+                          <div style={{ marginTop: 2, fontSize: 12, color: "var(--app-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {person.role || "Chưa có chức vụ"}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <div style={{ fontSize: 13, color: "var(--app-text-soft)" }}>{displayValue(person.department)}</div>
-                    <div style={{ fontSize: 13, color: "var(--app-text-soft)" }}>{displayValue(person.id_number)}</div>
-                    <div style={{ fontSize: 12, color: person.is_expired ? "var(--app-danger)" : person.status === "inactive" ? "var(--app-warm)" : "var(--app-success)" }}>
-                      {person.is_expired ? "Hết hạn" : person.status === "inactive" ? "Tạm khóa" : "Hoạt động"}
-                    </div>
-                  </button>
-                );
-              })}
+                      <div style={{ fontSize: 13, color: "var(--app-text-soft)", alignSelf: "center" }}>{displayValue(person.department)}</div>
+                      <div style={{ fontSize: 13, color: "var(--app-text-soft)", alignSelf: "center" }}>{displayValue(person.id_number)}</div>
+                      <div style={{ fontSize: 12, alignSelf: "center", color: person.is_expired ? "var(--app-danger)" : person.status === "inactive" ? "var(--app-warm)" : "var(--app-success)" }}>
+                        {person.is_expired ? "Hết hạn" : person.status === "inactive" ? "Tạm khóa" : "Hoạt động"}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div style={{ 
+                  display: "flex", 
+                  alignItems: "center", 
+                  justifyContent: "space-between", 
+                  padding: "12px 18px",
+                  borderTop: "1px solid var(--app-border)",
+                  background: "var(--app-bg-subtle)"
+                }}>
+                  <div style={{ fontSize: 13, color: "var(--app-muted)" }}>
+                    Trang {currentPage} / {totalPages} ({filteredPersons.length} hồ sơ)
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      style={{
+                        padding: "6px 10px",
+                        borderRadius: 8,
+                        border: "1px solid var(--app-border)",
+                        background: currentPage === 1 ? "transparent" : "var(--app-surface)",
+                        color: currentPage === 1 ? "var(--app-muted)" : "var(--app-text)",
+                        cursor: currentPage === 1 ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+                    <button
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      style={{
+                        padding: "6px 10px",
+                        borderRadius: 8,
+                        border: "1px solid var(--app-border)",
+                        background: currentPage === totalPages ? "transparent" : "var(--app-surface)",
+                        color: currentPage === totalPages ? "var(--app-muted)" : "var(--app-text)",
+                        cursor: currentPage === totalPages ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

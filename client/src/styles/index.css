@@ -8,16 +8,16 @@
 
 :root {
   /* Backgrounds */
-  --app-bg: #f8f9fc;
-  --app-bg-subtle: #f1f5f9;
+  --app-bg: #f0f4f8;
+  --app-bg-subtle: #f8fafc;
   --app-surface: #ffffff;
   --app-surface-raised: #ffffff;
-  --app-surface-overlay: rgba(255, 255, 255, 0.85);
+  --app-surface-overlay: rgba(255, 255, 255, 0.9);
 
   /* Borders */
-  --app-border: rgba(99, 102, 241, 0.12);
-  --app-border-focus: rgba(99, 102, 241, 0.45);
-  --app-divider: rgba(99, 102, 241, 0.08);
+  --app-border: rgba(37, 99, 235, 0.12);
+  --app-border-focus: rgba(37, 99, 235, 0.45);
+  --app-divider: rgba(37, 99, 235, 0.08);
 
   /* Text */
   --app-text: #0f172a;
@@ -25,11 +25,11 @@
   --app-muted: #64748b;
   --app-placeholder: #94a3b8;
 
-  /* Brand */
-  --app-accent: #6366f1;
-  --app-accent-light: #818cf8;
-  --app-accent-subtle: rgba(99, 102, 241, 0.08);
-  --app-accent-muted: rgba(99, 102, 241, 0.15);
+  /* Brand (Blue and White Theme) */
+  --app-accent: #2563eb;
+  --app-accent-light: #60a5fa;
+  --app-accent-subtle: rgba(37, 99, 235, 0.08);
+  --app-accent-muted: rgba(37, 99, 235, 0.15);
 
   /* Status */
   --app-success: #059669;
@@ -49,11 +49,11 @@
   --app-info-border: rgba(2, 132, 199, 0.2);
 
   /* Shadows */
-  --app-shadow-xs: 0 1px 2px rgba(99, 102, 241, 0.03);
-  --app-shadow-sm: 0 2px 8px rgba(99, 102, 241, 0.04), 0 1px 2px rgba(99, 102, 241, 0.02);
-  --app-shadow: 0 4px 16px rgba(99, 102, 241, 0.06), 0 1px 4px rgba(99, 102, 241, 0.03);
-  --app-shadow-lg: 0 10px 40px rgba(99, 102, 241, 0.08), 0 4px 12px rgba(99, 102, 241, 0.04);
-  --app-shadow-xl: 0 20px 60px rgba(99, 102, 241, 0.1), 0 8px 20px rgba(99, 102, 241, 0.05);
+  --app-shadow-xs: 0 1px 2px rgba(37, 99, 235, 0.03);
+  --app-shadow-sm: 0 2px 8px rgba(37, 99, 235, 0.04), 0 1px 2px rgba(37, 99, 235, 0.02);
+  --app-shadow: 0 4px 16px rgba(37, 99, 235, 0.06), 0 1px 4px rgba(37, 99, 235, 0.03);
+  --app-shadow-lg: 0 10px 40px rgba(37, 99, 235, 0.08), 0 4px 12px rgba(37, 99, 235, 0.04);
+  --app-shadow-xl: 0 20px 60px rgba(37, 99, 235, 0.1), 0 8px 20px rgba(37, 99, 235, 0.05);
 
   /* Sidebar */
   --sidebar-width: 264px;

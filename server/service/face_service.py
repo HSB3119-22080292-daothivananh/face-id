@@ -429,6 +429,13 @@ class FaceAiService:
             with open(filepath, "wb") as f: f.write(file_bytes)
         return filepath
 
+    @staticmethod
+    def bytes_to_base64(file_bytes: bytes) -> str:
+        import base64
+        # Return a standard base64 data URI format for images
+        encoded = base64.b64encode(file_bytes).decode('utf-8')
+        return f"data:image/jpeg;base64,{encoded}"
+
 
 face_ai_service   = FaceAiService()
 face_memory_store = FaceMemoryStore()

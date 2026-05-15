@@ -1,6 +1,6 @@
 import cv2
 
-IMG_PATH = r'controllers\debug_back\05_card_final.jpg'
+IMG_PATH = r'controllers\debug_back\card_final.jpg'
 
 img = cv2.imread(IMG_PATH)
 if img is None:

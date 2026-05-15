@@ -259,7 +259,7 @@ class ReadInfo:
         print(f'[Front] {time.time()-st:.2f}s')
         return result
 
-    # ── MẶT SAU ─────────────────────────────────────────────────────────────
+    # ── MẶT SAU (FULL SCAN – KHÔNG DÙNG YOLO) ──────────────────────────────
     def get_back_info(self, img_path):
         st  = time.time()
         img = cv2.imread(img_path)
@@ -272,43 +272,15 @@ class ReadInfo:
             "mrz_expiry":"", "mrz_name":"",
         }
 
-        # ── YOLO: special_features ───────────────────────────────────────────
-        print("\n[BackOCR] --- YOLO: special_features ---")
-        img_corr   = correct_skew(img.copy())
-        page_boxes = get_dictionary.prediction(
-            img_corr, self.imgsz, self.stride,
-            self.device, self.half, self.model, self.names)
-        page_boxes = get_dictionary.dict_processing(page_boxes)
+        # ── Warp thẻ về landscape 800×500 ────────────────────────────────────
+        try:
+            card = warp_card(correct_skew(img.copy()) if correct_skew(img.copy()) is not None else img)
+        except Exception:
+            card = warp_card(img)
 
-        ih, iw = img_corr.shape[:2]
-        top_boxes = sorted([
-            (k, b) for k, boxes in page_boxes.items() if boxes
-            for b in boxes if b[1] < ih*0.50 and b[0] < iw*0.68
-        ], key=lambda x: x[1][1])
+        H, W = card.shape[:2]  # 500, 800
 
-        feat_texts = []
-        for k, b in top_boxes:
-            t = self.ocr_info(img_corr, b).strip()
-            if t:
-                feat_texts.append(t)
-                print(f"   [{k}] → '{t}'")
-
-        raw_feat = " ".join(feat_texts)
-        for hdr in ["Personal identification:", "Đặc điểm nhận dạng /",
-                    "Đặc điểm nhận dạng", "Personal identification"]:
-            idx = raw_feat.find(hdr)
-            if idx != -1:
-                after = raw_feat[idx+len(hdr):].lstrip(" :/")
-                raw_feat = after if after.strip() else raw_feat
-                break
-        result["special_features"] = raw_feat.strip()
-        print(f" [*] SPECIAL_FEATURES : {result['special_features']}")
-
-        # ── Warp thẻ → lưu đúng 1 ảnh ──────────────────────────────────────
-        card = warp_card(img)
-
-        # Kiểm tra hướng bằng MRZ density
-        H, W = card.shape[:2]
+        # ── Kiểm tra hướng bằng MRZ density ─────────────────────────────────
         def _density(strip):
             t = self._ocr_raw(strip, is_mrz=True).upper()
             if not t: return 0.0
@@ -321,36 +293,160 @@ class ReadInfo:
             card = cv2.rotate(card, cv2.ROTATE_180)
             print("[BackOCR] → Xoay 180°")
 
-        # ← Lưu đúng 1 ảnh duy nhất
         _save_card(card)
+        H, W = card.shape[:2]
 
-        # ── Scan tự động ─────────────────────────────────────────────────────
-        print("\n[BackOCR] --- Scan tự động ---")
-        rows = _scan_rows(card, self._ocr_raw, n_slices=25,
-                          x0_pct=0.05, x1_pct=0.65)
-        for y0, y1, t in rows:
-            print(f"   [y={y0:3d}-{y1:3d}] '{t}'")
+        # ══════════════════════════════════════════════════════════════════════
+        # SCAN THEO VÙNG CỐ ĐỊNH (tỉ lệ chuẩn CCCD mặt sau)
+        #
+        # Layout thẻ CCCD mặt sau (landscape 800×500):
+        # ┌──────────────────────────────────────────────────────────────┐
+        # │  Đặc điểm nhận dạng / Personal identification:             │  ~0-15%
+        # │  <nội dung đặc điểm>                                       │  ~15-30%
+        # │  Ngày / Date ...  tháng / month ... năm / year ...         │  ~30-42%
+        # │  <Cơ quan cấp / Nơi cấp>                                  │  ~42-60%
+        # │                         ┌─────────────┐                    │
+        # │  [Vân tay trái]         │  Ảnh chân   │  [Vân tay phải]   │  ~55-75%
+        # │                         │  dung        │                   │
+        # │                         └─────────────┘                    │
+        # │  IDVNM << MRZ LINE 1 ...                                  │  ~76-85%
+        # │  MRZ LINE 2 ...                                           │  ~85-92%
+        # │  MRZ LINE 3 ...                                           │  ~92-100%
+        # └──────────────────────────────────────────────────────────────┘
+        # ══════════════════════════════════════════════════════════════════════
 
-        # Ngày cấp
-        print("\n[BackOCR] --- Ngày cấp ---")
-        date_result = _find_issue_date_region(rows)
-        date_y1 = 0
-        if date_result:
-            dy0, date_y1, date_str = date_result
-            result["issue_date"] = date_str
-            print(f" [*] ISSUE_DATE  : {date_str}  (y={dy0}-{date_y1})")
-        else:
-            print(" [!] Không tìm thấy ngày cấp")
+        # ── 1. Đặc điểm nhận dạng (special_features) ────────────────────────
+        print("\n[BackOCR] --- Đặc điểm nhận dạng (scan) ---")
+        # Vùng từ ~4% đến ~30% chiều cao, bên trái (0-65%)
+        feat_y0 = int(H * 0.04)
+        feat_y1 = int(H * 0.30)
+        feat_x0 = int(W * 0.03)
+        feat_x1 = int(W * 0.65)
+        feat_crop = card[feat_y0:feat_y1, feat_x0:feat_x1]
 
-        # Nơi cấp
-        print("\n[BackOCR] --- Nơi cấp ---")
-        by_lines = _find_issued_by_region(rows, date_y1)
-        result["issued_by"] = " ".join(t for _,_,t in by_lines).strip()
-        for y0, y1, t in by_lines:
-            print(f"   [y={y0}-{y1}] '{t}'")
+        # Chia vùng thành 3-4 dòng nhỏ để OCR từng dòng
+        feat_h = feat_y1 - feat_y0
+        n_feat_rows = 4
+        feat_step = feat_h // n_feat_rows
+        feat_texts = []
+        for i in range(n_feat_rows):
+            ry0 = i * feat_step
+            ry1 = (i + 1) * feat_step if i < n_feat_rows - 1 else feat_h
+            row_crop = feat_crop[ry0:ry1, :]
+            if row_crop.size == 0:
+                continue
+            t = self._ocr_raw(row_crop, is_mrz=False).strip()
+            if t:
+                feat_texts.append(t)
+                print(f"   [feat row {i} y={feat_y0+ry0}-{feat_y0+ry1}] → '{t}'")
+
+        raw_feat = " ".join(feat_texts)
+        # Loại bỏ header (tiêu đề "Đặc điểm nhận dạng / Personal identification")
+        for hdr in ["Personal identification:", "Đặc điểm nhận dạng /",
+                     "Đặc điểm nhận dạng:", "Đặc điểm nhận dạng",
+                     "Personal identification", "Dac diém nhan dang"]:
+            idx_hdr = raw_feat.lower().find(hdr.lower())
+            if idx_hdr != -1:
+                after = raw_feat[idx_hdr + len(hdr):].lstrip(" :/")
+                raw_feat = after if after.strip() else raw_feat
+                break
+        result["special_features"] = raw_feat.strip()
+        print(f" [*] SPECIAL_FEATURES : {result['special_features']}")
+
+        # ── 2. Ngày cấp (issue_date) ────────────────────────────────────────
+        print("\n[BackOCR] --- Ngày cấp (scan) ---")
+        # Vùng ngày cấp: ~28% đến ~44% chiều cao
+        date_y0 = int(H * 0.28)
+        date_y1 = int(H * 0.44)
+        date_x0 = int(W * 0.03)
+        date_x1 = int(W * 0.65)
+        date_crop = card[date_y0:date_y1, date_x0:date_x1]
+
+        # Chia 2 dòng
+        date_h = date_y1 - date_y0
+        date_rows_text = []
+        for i in range(3):
+            ry0 = i * (date_h // 3)
+            ry1 = (i + 1) * (date_h // 3) if i < 2 else date_h
+            row_crop = date_crop[ry0:ry1, :]
+            if row_crop.size == 0:
+                continue
+            t = self._ocr_raw(row_crop, is_mrz=False).strip()
+            if t:
+                date_rows_text.append(t)
+                print(f"   [date row {i}] → '{t}'")
+
+        # Tìm ngày tháng năm trong text
+        DATE_RE = re.compile(r'(\d{1,2})[./\-\s]+(\d{1,2})[./\-\s]+(\d{4})')
+        for t in date_rows_text:
+            m = DATE_RE.search(t)
+            if m:
+                d, mo, y = m.groups()
+                if 1990 <= int(y) <= 2099:
+                    result["issue_date"] = f"{d.zfill(2)}/{mo.zfill(2)}/{y}"
+                    print(f" [*] ISSUE_DATE  : {result['issue_date']}")
+                    break
+
+        if not result["issue_date"]:
+            # Thử scan rộng hơn
+            rows_scan = _scan_rows(card, self._ocr_raw, n_slices=25,
+                                   x0_pct=0.03, x1_pct=0.65)
+            date_scan = _find_issue_date_region(rows_scan)
+            if date_scan:
+                _, _, date_str = date_scan
+                result["issue_date"] = date_str
+                print(f" [*] ISSUE_DATE (fallback scan) : {date_str}")
+            else:
+                print(" [!] Không tìm thấy ngày cấp")
+
+        # ── 3. Nơi cấp (issued_by) ──────────────────────────────────────────
+        print("\n[BackOCR] --- Nơi cấp (scan) ---")
+        # Vùng nơi cấp: ~42% đến ~60% chiều cao
+        issuer_y0 = int(H * 0.42)
+        issuer_y1 = int(H * 0.62)
+        issuer_x0 = int(W * 0.03)
+        issuer_x1 = int(W * 0.65)
+        issuer_crop = card[issuer_y0:issuer_y1, issuer_x0:issuer_x1]
+
+        issuer_h = issuer_y1 - issuer_y0
+        issuer_texts = []
+        for i in range(3):
+            ry0 = i * (issuer_h // 3)
+            ry1 = (i + 1) * (issuer_h // 3) if i < 2 else issuer_h
+            row_crop = issuer_crop[ry0:ry1, :]
+            if row_crop.size == 0:
+                continue
+            t = self._ocr_raw(row_crop, is_mrz=False).strip()
+            if t:
+                low = t.lower()
+                # Bỏ các dòng chứa từ khóa không phải nơi cấp
+                skip_kw = ["finger", "left", "right", "ngon", "tro",
+                           "personal", "identification", "date", "month", "year"]
+                if any(kw in low for kw in skip_kw):
+                    continue
+                # Bỏ dòng toàn số hoặc ký tự MRZ
+                if re.fullmatch(r'[\d\s<]+', t):
+                    continue
+                issuer_texts.append(t)
+                print(f"   [issuer row {i}] → '{t}'")
+
+        result["issued_by"] = " ".join(issuer_texts).strip()
+
+        # Nếu không tìm thấy, fallback scan toàn thẻ
+        if not result["issued_by"]:
+            rows_scan = _scan_rows(card, self._ocr_raw, n_slices=25,
+                                   x0_pct=0.03, x1_pct=0.65)
+            # Tìm date_y1 để biết nơi cấp bắt đầu sau đó
+            date_scan = _find_issue_date_region(rows_scan)
+            d_y1 = date_scan[1] if date_scan else int(H * 0.35)
+            by_lines = _find_issued_by_region(rows_scan, d_y1)
+            result["issued_by"] = " ".join(t for _, _, t in by_lines).strip()
+            if result["issued_by"]:
+                print(f" [*] ISSUED_BY (fallback scan): {result['issued_by']}")
+
         print(f" [*] ISSUED_BY   : {result['issued_by']}")
 
-        # MRZ
+        # ── 4. MRZ (3 dòng cuối thẻ) ────────────────────────────────────────
         print("\n[BackOCR] --- MRZ ---")
         mrz_raw = _find_mrz_region(card, self._ocr_raw)
 
@@ -397,4 +493,4 @@ class ReadInfo:
         print(f" [*] MRZ_EXPIRY : {result['mrz_expiry']}")
         print(f" [*] MRZ_NAME   : {result['mrz_name']}")
         print(f'\n[Back] {time.time()-st:.2f}s\n')
-        return result
+        return result

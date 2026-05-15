@@ -54,6 +54,8 @@ def init_database():
             person_id VARCHAR(36) NOT NULL,
             front_img_path VARCHAR(255),
             back_img_path VARCHAR(255),
+            front_img_base64 LONGTEXT COMMENT 'Base64 of front CCCD',
+            back_img_base64 LONGTEXT COMMENT 'Base64 of back CCCD',
             id_number VARCHAR(20),
             full_name VARCHAR(255),
             dob VARCHAR(20),
@@ -77,6 +79,7 @@ def init_database():
             id VARCHAR(36) PRIMARY KEY,
             person_id VARCHAR(36) NOT NULL,
             embedding_vector LONGTEXT NOT NULL,
+            img_base64 LONGTEXT COMMENT 'Base64 of this face angle',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (person_id) REFERENCES persons(id) ON DELETE CASCADE,
             KEY idx_person_id (person_id)
