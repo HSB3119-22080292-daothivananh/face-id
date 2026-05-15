@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { CheckCircle, AlertTriangle, XCircle, Download, Filter, Search, Calendar } from "lucide-react";
+import { CheckCircle, AlertTriangle, XCircle, Download, Filter, Search, Calendar, ScanFace, Loader2 } from "lucide-react";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { apiClient } from "../services/api";
 
@@ -71,12 +71,12 @@ export function ActivityLog() {
         <div style={{ textAlign: "center" }}>
           <motion.div
             animate={{ rotate: 360 }}
-            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+            transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
             style={{ display: "inline-block", marginBottom: 16 }}
           >
-            <Download size={32} color="#00d4ff" />
+            <Loader2 size={36} color="var(--app-accent, #00d4ff)" />
           </motion.div>
-          <div style={{ color: "#7a95b8", fontSize: "14px" }}>Đang tải nhật ký hoạt động...</div>
+          <div style={{ color: "var(--app-muted, #7a95b8)", fontSize: "14px" }}>Đang tải nhật ký hoạt động...</div>
         </div>
       </div>
     );

@@ -8,6 +8,7 @@ import {
   ScanFace,
   ShieldAlert,
   Users,
+  Loader2,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { apiClient, type ActivityLogEntry, type MemoryStatus, type Person } from "../services/api";
@@ -158,17 +159,12 @@ export function Dashboard() {
 
   if (loading) {
     return (
-      <div style={{ padding: 28 }}>
-        <div
-          style={{
-            borderRadius: 28,
-            padding: 32,
-            background: "var(--app-surface)",
-            border: "1px solid var(--app-border)",
-            color: "var(--app-muted)",
-          }}
-        >
-          Đang tải dữ liệu dashboard...
+      <div style={{ padding: 28, height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ textAlign: "center" }}>
+          <motion.div animate={{ rotate: 360 }} transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }} style={{ display: "inline-block", marginBottom: 16 }}>
+            <Loader2 size={36} color="var(--app-accent)" />
+          </motion.div>
+          <div style={{ color: "var(--app-muted)", fontSize: 14 }}>Đang tải dữ liệu dashboard...</div>
         </div>
       </div>
     );

@@ -901,7 +901,7 @@ export function RegisterModal({ onClose, onSuccess }: Props) {
       onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
       style={{
         position: "fixed", inset: 0,
-        background: "rgba(0,0,0,0.9)",
+        background: "rgba(15, 23, 42, 0.6)",
         backdropFilter: "blur(15px)",
         display: "flex", alignItems: "center", justifyContent: "center",
         zIndex: 300, padding: 16,
