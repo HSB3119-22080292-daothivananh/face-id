@@ -30,3 +30,4 @@ pandas
 scipy
 imutils
 ultralytics
+google-generativeai
