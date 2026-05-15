@@ -157,7 +157,7 @@ function FieldGrid({
             }}
           >
             <div style={{ fontSize: 12, color: "var(--app-muted)", marginBottom: 8 }}>{field.label}</div>
-            <div style={{ fontSize: 14, color: "var(--app-text-soft)", lineHeight: 1.5, wordBreak: "break-word" }}>
+            <div style={{ fontSize: 14, color: "var(--app-text-soft)", lineHeight: 1.5, wordBreak: "break-all", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden", textOverflow: "ellipsis" }}>
               {field.value}
             </div>
           </div>
@@ -1029,16 +1029,12 @@ export function RegisteredFaces() {
               />
 
               <FieldGrid
-                title="Metadata hệ thống"
+                title="Metadata hệ thống (Base64)"
                 icon={Database}
                 fields={[
-                  { label: "img_url", value: displayValue(selectedPerson.img_url) },
-                  { label: "img_path", value: displayValue(selectedPerson.img_path) },
-                  { label: "front_img_path", value: displayValue(selectedPerson.front_img_path) },
-                  { label: "back_img_path", value: displayValue(selectedPerson.back_img_path) },
-                  { label: "Ảnh đại diện", value: displayValue(selectedPerson.img) },
-                  { label: "Ảnh CCCD trước", value: displayValue(selectedPerson.cccd_front_img) },
-                  { label: "Ảnh CCCD sau", value: displayValue(selectedPerson.cccd_back_img) },
+                  { label: "Ảnh đại diện", value: displayValue(selectedPerson.img_url) },
+                  { label: "CCCD mặt trước", value: displayValue(selectedPerson.cccd_front_img) },
+                  { label: "CCCD mặt sau", value: displayValue(selectedPerson.cccd_back_img) },
                 ]}
               />
 

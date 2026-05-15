@@ -1347,7 +1347,7 @@ async def register(
     new_encodings: list[tuple] = []
     avatar_path = ""
     saved_files = []
-    COSINE_THRESHOLD = 0.5
+    COSINE_THRESHOLD = 0.3 # Loosened from 0.5 for older CCCD photos
 
     try:
         cccd = json.loads(cccd_info) if cccd_info else {}
@@ -1477,7 +1477,7 @@ async def get_persons():
                    (SELECT COUNT(*) FROM face_embeddings e WHERE e.person_id = p.id) AS embeddings,
                    (SELECT COUNT(*) FROM recognition_logs l WHERE l.person_id = p.id AND l.status = 'success') AS recognitions,
                    c.id AS citizen_id_record_id,
-                   c.front_img_path, c.back_img_path,
+                   c.front_img_path, c.back_img_path, c.front_img_base64, c.back_img_base64,
                    c.id_number, c.full_name, c.dob, c.gender, c.nationality,
                    c.hometown, c.address, c.expiry_date, c.issue_date,
                    c.special_features, c.created_at AS citizen_created_at,
@@ -1494,8 +1494,8 @@ async def get_persons():
             raw_back = row.get("back_img_path") or ""
 
             row["img"] = row.get("img_url") or (f"/uploads/{Path(raw_avatar).name}" if raw_avatar else "")
-            row["cccd_front_img"] = f"/uploads/{Path(raw_front).name}" if raw_front else ""
-            row["cccd_back_img"] = f"/uploads/{Path(raw_back).name}" if raw_back else ""
+            row["cccd_front_img"] = row.get("front_img_base64") or (f"/uploads/{Path(raw_front).name}" if raw_front else "")
+            row["cccd_back_img"] = row.get("back_img_base64") or (f"/uploads/{Path(raw_back).name}" if raw_back else "")
             row["registered"] = row.get("registered_at")
 
             exp = row.get("work_expiry_date")
