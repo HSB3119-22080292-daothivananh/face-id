@@ -170,6 +170,10 @@ export function EmployeePortal() {
 
   const years = Array.from({ length: 7 }, (_, index) => now.getFullYear() - 3 + index);
   const cells = monthCells(year, month);
+  const checkedDays = attendanceByDay.size;
+  const latestCheckinTime = latestNotification
+    ? `${latestNotification.time} · ${latestNotification.date}`
+    : "Chưa có dữ liệu";
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--app-bg)", color: "var(--app-text)" }}>
@@ -241,10 +245,12 @@ export function EmployeePortal() {
         </div>
       </header>
 
-      <main style={{ padding: 20, display: "grid", gap: 18, maxWidth: 1120, margin: "0 auto" }}>
+      <main style={{ padding: 20, display: "grid", gap: 18, maxWidth: 1180, margin: "0 auto" }}>
         {latestNotification && (
           <section style={successBandStyle}>
-            <CheckCircle2 size={22} />
+            <div style={successIconStyle}>
+              <CheckCircle2 size={20} />
+            </div>
             <div>
               <div style={{ fontWeight: 800 }}>{latestNotification.title}</div>
               <div style={{ fontSize: 13, marginTop: 2 }}>
@@ -256,22 +262,50 @@ export function EmployeePortal() {
 
         {error && <div style={errorStyle}>{error}</div>}
 
+        <section style={summaryGridStyle}>
+          <article style={summaryCardStyle}>
+            <div style={summaryIconStyle}><CalendarDays size={18} /></div>
+            <div>
+              <div style={summaryLabelStyle}>Kỳ đang xem</div>
+              <div style={summaryValueStyle}>Tháng {pad(month)} / {year}</div>
+            </div>
+          </article>
+          <article style={summaryCardStyle}>
+            <div style={{ ...summaryIconStyle, background: "rgba(5,150,105,0.10)", color: "var(--app-success)" }}>
+              <CheckCircle2 size={18} />
+            </div>
+            <div>
+              <div style={summaryLabelStyle}>Ngày đã điểm danh</div>
+              <div style={summaryValueStyle}>{checkedDays}</div>
+            </div>
+          </article>
+          <article style={summaryCardStyle}>
+            <div style={{ ...summaryIconStyle, background: "rgba(14,165,233,0.10)", color: "#0284c7" }}>
+              <Clock size={18} />
+            </div>
+            <div>
+              <div style={summaryLabelStyle}>Lần gần nhất</div>
+              <div style={{ ...summaryValueStyle, fontSize: 15 }}>{latestCheckinTime}</div>
+            </div>
+          </article>
+        </section>
+
         <section style={calendarShellStyle}>
           <div style={calendarHeaderStyle}>
-            <button onClick={goPrevMonth} style={roundButtonStyle} title="Tháng trước">
-              <ChevronLeft size={22} />
-            </button>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-              <CalendarDays size={24} />
-              <div style={{ fontSize: "clamp(18px, 3vw, 26px)", fontWeight: 900, color: "#ffffff" }}>
-                THÁNG {pad(month)} - {year}
+            <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+              <div style={calendarHeaderIconStyle}>
+                <CalendarDays size={22} />
+              </div>
+              <div>
+                <div style={calendarEyebrowStyle}>Lịch điểm danh</div>
+                <div style={calendarTitleStyle}>Tháng {pad(month)} - {year}</div>
               </div>
             </div>
-            <button onClick={goNextMonth} style={roundButtonStyle} title="Tháng sau">
-              <ChevronRight size={22} />
-            </button>
 
-            <div style={{ marginLeft: "auto", display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <div style={calendarControlsStyle}>
+              <button onClick={goPrevMonth} style={roundButtonStyle} title="Tháng trước">
+                <ChevronLeft size={20} />
+              </button>
               <select value={month} onChange={(event) => setMonth(Number(event.target.value))} style={selectStyle}>
                 {Array.from({ length: 12 }, (_, index) => index + 1).map((item) => (
                   <option key={item} value={item}>Tháng {item}</option>
@@ -282,58 +316,73 @@ export function EmployeePortal() {
                   <option key={item} value={item}>{item}</option>
                 ))}
               </select>
+              <button onClick={goNextMonth} style={roundButtonStyle} title="Tháng sau">
+                <ChevronRight size={20} />
+              </button>
             </div>
           </div>
 
-          <div style={weekGridStyle}>
-            {weekDays.map((day) => (
-              <div key={day} style={weekDayStyle}>{day}</div>
-            ))}
-          </div>
+          <div style={calendarBodyScrollStyle}>
+            <div style={weekGridStyle}>
+              {weekDays.map((day) => (
+                <div key={day} style={weekDayStyle}>{day}</div>
+              ))}
+            </div>
 
-          <div style={dayGridStyle}>
-            {cells.map((date) => {
-              const key = formatDateKey(date);
-              const records = attendanceByDay.get(key) || [];
-              const inMonth = date.getMonth() + 1 === month;
-              const isToday = key === formatDateKey(now);
-              const primaryRecord = records[0];
+            <div style={dayGridStyle}>
+              {cells.map((date) => {
+                const key = formatDateKey(date);
+                const records = attendanceByDay.get(key) || [];
+                const inMonth = date.getMonth() + 1 === month;
+                const isToday = key === formatDateKey(now);
+                const primaryRecord = records[0];
+                const hasRecords = records.length > 0;
+                const isWeekend = date.getDay() === 0 || date.getDay() === 6;
 
-              return (
-                <button
-                  key={key}
-                  onClick={() => primaryRecord && setSelectedCheckin(primaryRecord)}
-                  disabled={!primaryRecord}
-                  style={{
-                    ...dayCellStyle,
-                    opacity: inMonth ? 1 : 0.42,
-                    background: isToday ? "#fff4d6" : records.length > 0 ? "rgba(5,150,105,0.07)" : "#ffffff",
-                    borderColor: isToday ? "rgba(217,119,6,0.28)" : records.length > 0 ? "rgba(5,150,105,0.22)" : "var(--app-border)",
-                    cursor: primaryRecord ? "pointer" : "default",
-                  }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                    <span style={{ fontSize: 28, fontWeight: 800, color: date.getDay() === 0 ? "#dc2626" : "#0f172a" }}>
-                      {date.getDate()}
-                    </span>
-                    {records.length > 0 && (
-                      <span style={checkBadgeStyle}>
-                        <CheckCircle2 size={12} />
-                        {records.length}
+                return (
+                  <button
+                    key={key}
+                    onClick={() => primaryRecord && setSelectedCheckin(primaryRecord)}
+                    disabled={!primaryRecord}
+                    style={{
+                      ...dayCellStyle,
+                      ...(hasRecords ? attendedDayCellStyle : {}),
+                      ...(isToday ? todayDayCellStyle : {}),
+                      opacity: inMonth ? 1 : 0.42,
+                      cursor: primaryRecord ? "pointer" : "default",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                      <span style={{ ...dayNumberStyle, color: isWeekend ? "#dc2626" : "#0f172a" }}>
+                        {date.getDate()}
                       </span>
-                    )}
-                  </div>
-                  {primaryRecord ? (
-                    <div style={{ marginTop: "auto", display: "grid", gap: 4 }}>
-                      <div style={{ fontSize: 12, color: "var(--app-success)", fontWeight: 800 }}>Đã điểm danh</div>
-                      <div style={{ fontSize: 12, color: "var(--app-muted)" }}>{primaryRecord.time}</div>
+                      {isToday && <span style={todayBadgeStyle}>Hôm nay</span>}
+                      {hasRecords && !isToday && (
+                        <span style={checkBadgeStyle}>
+                          <CheckCircle2 size={12} />
+                          {records.length}
+                        </span>
+                      )}
                     </div>
-                  ) : (
-                    <div style={{ marginTop: "auto", fontSize: 12, color: "var(--app-placeholder)" }}>Chưa check-in</div>
-                  )}
-                </button>
-              );
-            })}
+                    {primaryRecord ? (
+                      <div style={checkinCardStyle}>
+                        <div style={checkinStatusStyle}>
+                          <CheckCircle2 size={13} />
+                          Đã điểm danh
+                        </div>
+                        <div style={checkinMetaStyle}>
+                          <Clock size={12} />
+                          {primaryRecord.time}
+                        </div>
+                        {records.length > 1 && <div style={moreRecordStyle}>+{records.length - 1} lần khác</div>}
+                      </div>
+                    ) : (
+                      <div style={emptyCheckinStyle}>Chưa check-in</div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </section>
       </main>
@@ -415,14 +464,26 @@ const dangerButtonStyle: CSSProperties = {
 };
 
 const successBandStyle: CSSProperties = {
-  borderRadius: 8,
-  padding: 16,
-  background: "var(--app-success-bg)",
-  border: "1px solid var(--app-success-border)",
-  color: "var(--app-success)",
+  borderRadius: 10,
+  padding: "14px 16px",
+  background: "linear-gradient(135deg, rgba(5,150,105,0.10), rgba(14,165,233,0.08))",
+  border: "1px solid rgba(5,150,105,0.18)",
+  color: "var(--app-text)",
   display: "flex",
   alignItems: "center",
   gap: 12,
+};
+
+const successIconStyle: CSSProperties = {
+  width: 38,
+  height: 38,
+  borderRadius: 10,
+  display: "grid",
+  placeItems: "center",
+  color: "var(--app-success)",
+  background: "#ffffff",
+  border: "1px solid rgba(5,150,105,0.18)",
+  boxShadow: "var(--app-shadow-xs)",
 };
 
 const errorStyle: CSSProperties = {
@@ -434,8 +495,50 @@ const errorStyle: CSSProperties = {
   fontSize: 13,
 };
 
+const summaryGridStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gap: 12,
+};
+
+const summaryCardStyle: CSSProperties = {
+  minHeight: 86,
+  padding: 16,
+  borderRadius: 10,
+  background: "var(--app-surface)",
+  border: "1px solid var(--app-border)",
+  boxShadow: "var(--app-shadow-xs)",
+  display: "flex",
+  alignItems: "center",
+  gap: 12,
+};
+
+const summaryIconStyle: CSSProperties = {
+  width: 40,
+  height: 40,
+  borderRadius: 10,
+  display: "grid",
+  placeItems: "center",
+  background: "var(--app-accent-subtle)",
+  color: "var(--app-accent)",
+};
+
+const summaryLabelStyle: CSSProperties = {
+  fontSize: 12,
+  color: "var(--app-muted)",
+  fontWeight: 700,
+  textTransform: "uppercase",
+};
+
+const summaryValueStyle: CSSProperties = {
+  marginTop: 4,
+  fontSize: 18,
+  fontWeight: 900,
+  color: "var(--app-text)",
+};
+
 const calendarShellStyle: CSSProperties = {
-  borderRadius: 8,
+  borderRadius: 12,
   overflow: "hidden",
   background: "var(--app-surface)",
   border: "1px solid var(--app-border)",
@@ -443,70 +546,141 @@ const calendarShellStyle: CSSProperties = {
 };
 
 const calendarHeaderStyle: CSSProperties = {
-  minHeight: 64,
-  padding: "10px 16px",
-  background: "#4caf5b",
+  minHeight: 76,
+  padding: "14px 16px",
+  background: "#0f172a",
+  color: "#ffffff",
   display: "flex",
   alignItems: "center",
+  justifyContent: "space-between",
   gap: 12,
   flexWrap: "wrap",
 };
 
+const calendarHeaderIconStyle: CSSProperties = {
+  width: 42,
+  height: 42,
+  borderRadius: 10,
+  display: "grid",
+  placeItems: "center",
+  background: "rgba(255,255,255,0.10)",
+  border: "1px solid rgba(255,255,255,0.16)",
+};
+
+const calendarEyebrowStyle: CSSProperties = {
+  fontSize: 12,
+  color: "rgba(255,255,255,0.68)",
+  fontWeight: 800,
+  textTransform: "uppercase",
+};
+
+const calendarTitleStyle: CSSProperties = {
+  marginTop: 2,
+  fontSize: 24,
+  fontWeight: 900,
+  color: "#ffffff",
+};
+
+const calendarControlsStyle: CSSProperties = {
+  marginLeft: "auto",
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  flexWrap: "wrap",
+};
+
 const roundButtonStyle: CSSProperties = {
-  width: 34,
-  height: 34,
-  borderRadius: 999,
-  border: "none",
-  background: "#ffffff",
-  color: "#4caf5b",
+  width: 36,
+  height: 36,
+  borderRadius: 8,
+  border: "1px solid rgba(255,255,255,0.16)",
+  background: "rgba(255,255,255,0.10)",
+  color: "#ffffff",
   display: "grid",
   placeItems: "center",
   cursor: "pointer",
 };
 
 const selectStyle: CSSProperties = {
-  height: 34,
+  height: 36,
   minWidth: 108,
-  borderRadius: 6,
-  border: "1px solid rgba(255,255,255,0.5)",
+  borderRadius: 8,
+  border: "1px solid var(--app-border)",
   background: "#ffffff",
   color: "#0f172a",
-  padding: "0 10px",
+  padding: "0 12px",
   fontWeight: 700,
+};
+
+const calendarBodyScrollStyle: CSSProperties = {
+  overflowX: "auto",
 };
 
 const weekGridStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(7, minmax(96px, 1fr))",
+  gridTemplateColumns: "repeat(7, minmax(112px, 1fr))",
   borderBottom: "1px solid var(--app-border)",
-  overflowX: "auto",
+  background: "#f8fafc",
+  minWidth: 784,
 };
 
 const weekDayStyle: CSSProperties = {
-  minHeight: 38,
+  minHeight: 42,
   display: "grid",
   placeItems: "center",
   color: "var(--app-muted)",
-  fontWeight: 700,
-  fontSize: 14,
+  fontWeight: 800,
+  fontSize: 12,
+  textTransform: "uppercase",
 };
 
 const dayGridStyle: CSSProperties = {
   display: "grid",
-  gridTemplateColumns: "repeat(7, minmax(96px, 1fr))",
-  overflowX: "auto",
+  gridTemplateColumns: "repeat(7, minmax(112px, 1fr))",
+  background: "#eef2f7",
+  gap: 1,
+  minWidth: 784,
 };
 
 const dayCellStyle: CSSProperties = {
-  minHeight: 118,
-  padding: 10,
+  minHeight: 132,
+  padding: 12,
   border: "none",
-  borderRight: "1px solid var(--app-border)",
-  borderBottom: "1px solid var(--app-border)",
+  background: "#ffffff",
   textAlign: "left",
   display: "flex",
   flexDirection: "column",
-  gap: 8,
+  gap: 10,
+  transition: "transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease",
+};
+
+const attendedDayCellStyle: CSSProperties = {
+  background: "#f0fdf4",
+  boxShadow: "inset 3px 0 0 var(--app-success)",
+};
+
+const todayDayCellStyle: CSSProperties = {
+  background: "#fffbeb",
+  boxShadow: "inset 3px 0 0 #d97706",
+};
+
+const dayNumberStyle: CSSProperties = {
+  fontSize: 28,
+  fontWeight: 900,
+  lineHeight: 1,
+};
+
+const todayBadgeStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  height: 22,
+  padding: "0 8px",
+  borderRadius: 999,
+  background: "#ffffff",
+  border: "1px solid rgba(217,119,6,0.24)",
+  color: "#b45309",
+  fontSize: 11,
+  fontWeight: 900,
 };
 
 const checkBadgeStyle: CSSProperties = {
@@ -522,6 +696,51 @@ const checkBadgeStyle: CSSProperties = {
   fontWeight: 800,
 };
 
+const checkinCardStyle: CSSProperties = {
+  marginTop: "auto",
+  display: "grid",
+  gap: 6,
+  padding: 10,
+  borderRadius: 10,
+  background: "#ffffff",
+  border: "1px solid rgba(5,150,105,0.18)",
+  boxShadow: "0 8px 18px rgba(15,23,42,0.05)",
+};
+
+const checkinStatusStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  color: "var(--app-success)",
+  fontSize: 12,
+  fontWeight: 900,
+};
+
+const checkinMetaStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 5,
+  color: "var(--app-muted)",
+  fontSize: 12,
+  fontWeight: 700,
+};
+
+const moreRecordStyle: CSSProperties = {
+  color: "#0284c7",
+  fontSize: 12,
+  fontWeight: 800,
+};
+
+const emptyCheckinStyle: CSSProperties = {
+  marginTop: "auto",
+  fontSize: 12,
+  color: "var(--app-placeholder)",
+  padding: "9px 10px",
+  borderRadius: 10,
+  background: "#f8fafc",
+  border: "1px dashed var(--app-border)",
+};
+
 const modalOverlayStyle: CSSProperties = {
   position: "fixed",
   inset: 0,
@@ -535,11 +754,11 @@ const modalOverlayStyle: CSSProperties = {
 
 const modalStyle: CSSProperties = {
   width: "min(100%, 460px)",
-  borderRadius: 8,
+  borderRadius: 12,
   background: "var(--app-surface)",
   border: "1px solid var(--app-border)",
   boxShadow: "var(--app-shadow-xl)",
-  padding: 20,
+  padding: 22,
 };
 
 const modalCloseStyle: CSSProperties = {
