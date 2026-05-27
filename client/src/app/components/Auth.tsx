@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, FormEvent } from "react";
 import { Navigate, Outlet, useNavigate } from "react-router";
-import { KeyRound, Loader2, LogIn, ScanFace, UserRound } from "lucide-react";
+import { Camera, CameraOff, KeyRound, Loader2, LogIn, RefreshCw, ScanFace, UserRound } from "lucide-react";
 import { apiClient, type AuthRole, type AuthSession, type AdminProfile, type EmployeeProfile } from "../services/api";
 
 export const AUTH_TOKEN_KEY = "face-id.auth.token";
@@ -99,9 +99,16 @@ export function EmployeeRoute() {
 
 export function LoginScreen() {
   const navigate = useNavigate();
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+  const [mode, setMode] = useState<"password" | "face">("password");
   const [loading, setLoading] = useState(false);
+  const [faceLoading, setFaceLoading] = useState(false);
+  const [cameraOn, setCameraOn] = useState(false);
+  const [cameraError, setCameraError] = useState("");
   const [checking, setChecking] = useState(true);
   const [error, setError] = useState("");
 
@@ -125,8 +132,84 @@ export function LoginScreen() {
       });
   }, [navigate]);
 
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setCameraOn(false);
+  };
+
+  const startCamera = async () => {
+    setCameraError("");
+    setError("");
+    stopCamera();
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: "user",
+          width: { ideal: 720 },
+          height: { ideal: 540 },
+        },
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+      setCameraOn(true);
+    } catch (err: any) {
+      setCameraError(err?.name === "NotAllowedError" ? "Bạn chưa cấp quyền camera." : "Không thể mở camera.");
+      setCameraOn(false);
+    }
+  };
+
+  useEffect(() => {
+    if (mode === "face") {
+      startCamera();
+    } else {
+      stopCamera();
+    }
+    return () => {
+      if (mode === "face") stopCamera();
+    };
+  }, [mode]);
+
+  useEffect(() => () => stopCamera(), []);
+
+  const captureFaceBlob = () =>
+    new Promise<Blob>((resolve, reject) => {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      if (!video || !canvas || video.readyState < 2) {
+        reject(new Error("Camera chưa sẵn sàng"));
+        return;
+      }
+
+      const width = video.videoWidth || 720;
+      const height = video.videoHeight || 540;
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        reject(new Error("Không thể chụp ảnh từ camera"));
+        return;
+      }
+
+      ctx.drawImage(video, 0, 0, width, height);
+      canvas.toBlob((blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error("Không thể tạo ảnh FaceID"));
+      }, "image/jpeg", 0.86);
+    });
+
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
+    if (mode !== "password") return;
     setLoading(true);
     setError("");
     try {
@@ -137,6 +220,23 @@ export function LoginScreen() {
       setError(err instanceof Error ? err.message : "Đăng nhập thất bại");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleFaceLogin = async () => {
+    setFaceLoading(true);
+    setError("");
+    setCameraError("");
+    try {
+      const blob = await captureFaceBlob();
+      const session = await apiClient.faceLogin(blob);
+      storeAuth(session);
+      stopCamera();
+      navigate(session.role === "admin" ? "/" : "/employee", { replace: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Đăng nhập FaceID thất bại");
+    } finally {
+      setFaceLoading(false);
     }
   };
 
@@ -186,56 +286,102 @@ export function LoginScreen() {
           </div>
         </div>
 
-        <label style={{ display: "grid", gap: 6 }}>
-          <span style={{ fontSize: 13, color: "var(--app-muted)" }}>Tài khoản</span>
-          <div style={{ position: "relative" }}>
-            <UserRound size={17} style={{ position: "absolute", left: 12, top: 12, color: "var(--app-muted)" }} />
-            <input
-              value={identifier}
-              onChange={(event) => setIdentifier(event.target.value)}
-              placeholder="admin hoặc số CCCD"
-              autoComplete="username"
-              style={inputStyle}
-            />
-          </div>
-        </label>
+        <div style={modeSwitchStyle}>
+          <button
+            type="button"
+            onClick={() => setMode("password")}
+            style={{ ...modeButtonStyle, ...(mode === "password" ? modeButtonActiveStyle : {}) }}
+          >
+            <KeyRound size={16} />
+            Mật khẩu
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("face")}
+            style={{ ...modeButtonStyle, ...(mode === "face" ? modeButtonActiveStyle : {}) }}
+          >
+            <ScanFace size={16} />
+            FaceID
+          </button>
+        </div>
 
-        <label style={{ display: "grid", gap: 6 }}>
-          <span style={{ fontSize: 13, color: "var(--app-muted)" }}>Mật khẩu</span>
-          <div style={{ position: "relative" }}>
-            <KeyRound size={17} style={{ position: "absolute", left: 12, top: 12, color: "var(--app-muted)" }} />
-            <input
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              type="password"
-              placeholder="Mật khẩu"
-              autoComplete="current-password"
-              style={inputStyle}
-            />
+        {mode === "password" ? (
+          <>
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontSize: 13, color: "var(--app-muted)" }}>Tài khoản</span>
+              <div style={{ position: "relative" }}>
+                <UserRound size={17} style={{ position: "absolute", left: 12, top: 12, color: "var(--app-muted)" }} />
+                <input
+                  value={identifier}
+                  onChange={(event) => setIdentifier(event.target.value)}
+                  placeholder="admin hoặc số CCCD"
+                  autoComplete="username"
+                  style={inputStyle}
+                />
+              </div>
+            </label>
+
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontSize: 13, color: "var(--app-muted)" }}>Mật khẩu</span>
+              <div style={{ position: "relative" }}>
+                <KeyRound size={17} style={{ position: "absolute", left: 12, top: 12, color: "var(--app-muted)" }} />
+                <input
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  type="password"
+                  placeholder="Mật khẩu"
+                  autoComplete="current-password"
+                  style={inputStyle}
+                />
+              </div>
+            </label>
+          </>
+        ) : (
+          <div style={{ display: "grid", gap: 12 }}>
+            <div style={cameraBoxStyle}>
+              <canvas ref={canvasRef} style={{ display: "none" }} />
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  display: cameraOn ? "block" : "none",
+                  transform: "scaleX(-1)",
+                }}
+              />
+              {!cameraOn && (
+                <div style={cameraEmptyStyle}>
+                  <CameraOff size={34} />
+                  <div>{cameraError || "Camera chưa bật"}</div>
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <button type="button" onClick={startCamera} disabled={faceLoading} style={secondaryButtonStyle}>
+                <Camera size={16} />
+                Bật lại camera
+              </button>
+              <button type="button" onClick={handleFaceLogin} disabled={!cameraOn || faceLoading} style={primaryButtonStyle}>
+                {faceLoading ? <RefreshCw size={16} style={{ animation: "spin 1s linear infinite" }} /> : <ScanFace size={16} />}
+                Quét FaceID
+              </button>
+            </div>
           </div>
-        </label>
+        )}
 
         {error && <div style={{ color: "var(--app-danger)", fontSize: 13, lineHeight: 1.5 }}>{error}</div>}
 
-        <button
-          disabled={loading}
-          style={{
-            height: 44,
-            border: "none",
-            borderRadius: 8,
-            background: "var(--app-accent)",
-            color: "#ffffff",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 8,
-            cursor: loading ? "not-allowed" : "pointer",
-            fontWeight: 800,
-          }}
-        >
-          {loading ? <Loader2 size={18} style={{ animation: "spin 1s linear infinite" }} /> : <LogIn size={18} />}
-          Đăng nhập
-        </button>
+        {mode === "password" && (
+          <button disabled={loading} style={primaryButtonStyle}>
+            {loading ? <Loader2 size={18} style={{ animation: "spin 1s linear infinite" }} /> : <LogIn size={18} />}
+            Đăng nhập
+          </button>
+        )}
       </form>
     </div>
   );
@@ -249,4 +395,78 @@ const inputStyle: CSSProperties = {
   border: "1px solid var(--app-border)",
   background: "var(--app-bg-subtle)",
   color: "var(--app-text)",
+};
+
+const modeSwitchStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: 8,
+  padding: 4,
+  borderRadius: 8,
+  background: "var(--app-bg-subtle)",
+  border: "1px solid var(--app-border)",
+};
+
+const modeButtonStyle: CSSProperties = {
+  height: 38,
+  border: "none",
+  borderRadius: 6,
+  background: "transparent",
+  color: "var(--app-muted)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 7,
+  cursor: "pointer",
+  fontWeight: 800,
+};
+
+const modeButtonActiveStyle: CSSProperties = {
+  background: "var(--app-surface)",
+  color: "var(--app-accent)",
+  boxShadow: "var(--app-shadow-xs)",
+};
+
+const cameraBoxStyle: CSSProperties = {
+  position: "relative",
+  width: "100%",
+  aspectRatio: "4 / 3",
+  overflow: "hidden",
+  borderRadius: 8,
+  border: "1px solid var(--app-border)",
+  background: "#0f172a",
+};
+
+const cameraEmptyStyle: CSSProperties = {
+  position: "absolute",
+  inset: 0,
+  display: "grid",
+  placeItems: "center",
+  alignContent: "center",
+  gap: 10,
+  color: "var(--app-placeholder)",
+  fontSize: 13,
+  textAlign: "center",
+  padding: 18,
+};
+
+const primaryButtonStyle: CSSProperties = {
+  height: 44,
+  border: "none",
+  borderRadius: 8,
+  background: "var(--app-accent)",
+  color: "#ffffff",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 8,
+  cursor: "pointer",
+  fontWeight: 800,
+};
+
+const secondaryButtonStyle: CSSProperties = {
+  ...primaryButtonStyle,
+  background: "var(--app-bg-subtle)",
+  color: "var(--app-text)",
+  border: "1px solid var(--app-border)",
 };

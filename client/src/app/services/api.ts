@@ -285,6 +285,21 @@ export const apiClient = {
     return result;
   },
 
+  async faceLogin(imageData: Blob): Promise<AuthSession> {
+    const formData = new FormData();
+    formData.append("image", imageData, "face-login.jpg");
+
+    const response = await fetch(`${API_URL}/api/auth/face-login`, {
+      method: "POST",
+      body: formData,
+    });
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || result.detail || "Đăng nhập FaceID thất bại");
+    }
+    return result;
+  },
+
   async getMe(token: string): Promise<{ role: AuthRole; user: AdminProfile | EmployeeProfile }> {
     const response = await fetch(`${API_URL}/api/auth/me`, {
       headers: { Authorization: `Bearer ${token}` },
