@@ -1137,10 +1137,13 @@ export function RegisteredFaces() {
         {showRegisterModal && (
           <RegisterModal
             onClose={() => setShowRegisterModal(false)}
-            onSuccess={async () => {
+            onSuccess={async (result) => {
               setShowRegisterModal(false);
               await loadPersons();
-              setToast({ message: "Đăng ký người dùng thành công", type: "success" });
+              const accountMessage = result.account
+                ? `Đăng ký thành công. Username: ${result.account.username} - MK tạm: ${result.account.temporary_password}${result.account.email_sent ? " - đã gửi email" : " - chưa cấu hình SMTP để gửi email"}`
+                : "Đăng ký người dùng thành công";
+              setToast({ message: accountMessage, type: "success" });
             }}
           />
         )}

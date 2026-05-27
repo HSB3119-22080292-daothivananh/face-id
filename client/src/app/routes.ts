@@ -5,10 +5,11 @@ import { LiveRecognition } from "./components/LiveRecognition";
 import { RegisteredFaces } from "./components/RegisteredFaces";
 import { ActivityLog } from "./components/ActivityLog";
 import { EmployeePortal } from "./components/EmployeePortal";
-import { AdminRoute, EmployeeRoute, LoginScreen } from "./components/Auth";
+import { AdminRoute, EmployeeRoute, LoginScreen, ResetPasswordScreen } from "./components/Auth";
 
 export const router = createBrowserRouter([
   { path: "/login", Component: LoginScreen },
+  { path: "/reset-password", Component: ResetPasswordScreen },
   {
     path: "/",
     Component: AdminRoute,

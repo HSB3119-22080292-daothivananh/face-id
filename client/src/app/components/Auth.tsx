@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, FormEvent } from "react";
-import { Navigate, Outlet, useNavigate } from "react-router";
-import { Camera, CameraOff, KeyRound, Loader2, LogIn, RefreshCw, ScanFace, UserRound } from "lucide-react";
+import { Navigate, Outlet, useNavigate, useSearchParams } from "react-router";
+import { Camera, CameraOff, CheckCircle2, KeyRound, Loader2, LogIn, RefreshCw, ScanFace, ShieldCheck, UserRound } from "lucide-react";
 import { apiClient, type AuthRole, type AuthSession, type AdminProfile, type EmployeeProfile } from "../services/api";
 
 export const AUTH_TOKEN_KEY = "face-id.auth.token";
@@ -93,7 +93,6 @@ export function EmployeeRoute() {
   const { loading, auth } = useVerifiedAuth();
   if (loading) return <AuthFallback />;
   if (!auth) return <Navigate to="/login" replace />;
-  if (auth.role === "admin") return <Navigate to="/" replace />;
   return <Outlet />;
 }
 
@@ -314,7 +313,7 @@ export function LoginScreen() {
                 <input
                   value={identifier}
                   onChange={(event) => setIdentifier(event.target.value)}
-                  placeholder="admin hoặc số CCCD"
+                  placeholder="admin hoặc username nhân viên"
                   autoComplete="username"
                   style={inputStyle}
                 />
@@ -381,6 +380,135 @@ export function LoginScreen() {
             {loading ? <Loader2 size={18} style={{ animation: "spin 1s linear infinite" }} /> : <LogIn size={18} />}
             Đăng nhập
           </button>
+        )}
+      </form>
+    </div>
+  );
+}
+
+export function ResetPasswordScreen() {
+  const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const token = params.get("token") || "";
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    setError("");
+    if (!token) {
+      setError("Link đổi mật khẩu không hợp lệ.");
+      return;
+    }
+    if (password.length < 6) {
+      setError("Mật khẩu mới cần tối thiểu 6 ký tự.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError("Mật khẩu nhập lại chưa khớp.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await apiClient.resetPassword(token, password);
+      setDone(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Không thể đổi mật khẩu");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "grid",
+        placeItems: "center",
+        padding: 20,
+        background: "var(--app-bg)",
+      }}
+    >
+      <form
+        onSubmit={handleSubmit}
+        style={{
+          width: "min(100%, 420px)",
+          borderRadius: 8,
+          background: "var(--app-surface)",
+          border: "1px solid var(--app-border)",
+          boxShadow: "var(--app-shadow-lg)",
+          padding: 24,
+          display: "grid",
+          gap: 16,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div
+            style={{
+              width: 46,
+              height: 46,
+              borderRadius: 8,
+              display: "grid",
+              placeItems: "center",
+              background: done ? "var(--app-success-bg)" : "var(--app-accent-subtle)",
+              color: done ? "var(--app-success)" : "var(--app-accent)",
+            }}
+          >
+            {done ? <CheckCircle2 size={24} /> : <ShieldCheck size={24} />}
+          </div>
+          <div>
+            <div style={{ fontSize: 22, fontWeight: 800 }}>{done ? "Đã đổi mật khẩu" : "Đổi mật khẩu"}</div>
+            <div style={{ fontSize: 13, color: "var(--app-muted)" }}>
+              {done ? "Bạn có thể đăng nhập bằng mật khẩu mới." : "Nhập mật khẩu mới cho tài khoản nhân viên"}
+            </div>
+          </div>
+        </div>
+
+        {done ? (
+          <button type="button" onClick={() => navigate("/login", { replace: true })} style={primaryButtonStyle}>
+            <LogIn size={18} />
+            Về màn đăng nhập
+          </button>
+        ) : (
+          <>
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontSize: 13, color: "var(--app-muted)" }}>Mật khẩu mới</span>
+              <div style={{ position: "relative" }}>
+                <KeyRound size={17} style={{ position: "absolute", left: 12, top: 12, color: "var(--app-muted)" }} />
+                <input
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  type="password"
+                  autoComplete="new-password"
+                  style={inputStyle}
+                />
+              </div>
+            </label>
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontSize: 13, color: "var(--app-muted)" }}>Nhập lại mật khẩu</span>
+              <div style={{ position: "relative" }}>
+                <KeyRound size={17} style={{ position: "absolute", left: 12, top: 12, color: "var(--app-muted)" }} />
+                <input
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  type="password"
+                  autoComplete="new-password"
+                  style={inputStyle}
+                />
+              </div>
+            </label>
+
+            {error && <div style={{ color: "var(--app-danger)", fontSize: 13, lineHeight: 1.5 }}>{error}</div>}
+
+            <button disabled={loading} style={primaryButtonStyle}>
+              {loading ? <Loader2 size={18} style={{ animation: "spin 1s linear infinite" }} /> : <ShieldCheck size={18} />}
+              Cập nhật mật khẩu
+            </button>
+          </>
         )}
       </form>
     </div>

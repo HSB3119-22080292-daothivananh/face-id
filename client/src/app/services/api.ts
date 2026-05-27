@@ -81,6 +81,7 @@ export interface EmployeeProfile {
   role: string;
   department: string;
   username: string;
+  email?: string;
 }
 
 export interface AdminProfile {
@@ -123,6 +124,42 @@ export interface EmployeeLoginResponse {
   expires_at: string;
 }
 
+export interface RegisteredAccountInfo {
+  person_id: string;
+  name: string;
+  username: string;
+  email: string;
+  temporary_password: string;
+  login_link: string;
+  reset_link: string;
+  reset_expires_at: string;
+  email_sent: boolean;
+}
+
+export interface RegisterFaceResponse {
+  success: boolean;
+  message: string;
+  img_url?: string;
+  ramCount?: number;
+  account?: RegisteredAccountInfo;
+}
+
+export interface AdminEmployeeAccount {
+  person_id: string;
+  name: string;
+  role: string;
+  department: string;
+  status: "active" | "inactive";
+  work_expiry_date: string | null;
+  username: string | null;
+  email: string | null;
+  id_number: string | null;
+  last_login_at: string | null;
+  last_attendance_time: string | null;
+  unread: number;
+  must_change_password: boolean;
+}
+
 // ─── API Client ───────────────────────────────────────────────────────────────
 export const apiClient = {
   /**
@@ -145,9 +182,11 @@ export const apiClient = {
    * 2. Đăng ký khuôn mặt mới
    * Backend: lưu DB + cập nhật RAM ngay → bật cam là nhận ra liền
    */
-  async registerFace(data: FormData): Promise<{ success: boolean; message: string; ramCount?: number }> {
+  async registerFace(data: FormData): Promise<RegisterFaceResponse> {
+    const token = localStorage.getItem("face-id.auth.token");
     const response = await fetch(`${API_URL}/api/face/register`, {
       method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       body: data,
     });
     const result = await response.json();
@@ -311,6 +350,18 @@ export const apiClient = {
     return { role: result.role, user: result.user };
   },
 
+  async resetPassword(token: string, password: string): Promise<void> {
+    const response = await fetch(`${API_URL}/api/auth/reset-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, password }),
+    });
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || result.detail || "Khong the doi mat khau");
+    }
+  },
+
   async loginEmployee(identifier: string, password: string): Promise<EmployeeLoginResponse> {
     const response = await fetch(`${API_URL}/api/employee/login`, {
       method: "POST",
@@ -364,5 +415,47 @@ export const apiClient = {
     if (!response.ok || !result.success) {
       throw new Error(result.error || result.detail || "Không thể cập nhật thông báo");
     }
+  },
+
+  async getAdminEmployees(token: string): Promise<AdminEmployeeAccount[]> {
+    const response = await fetch(`${API_URL}/api/admin/employees`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || result.detail || "Khong the tai danh sach nhan vien");
+    }
+    return result.data ?? [];
+  },
+
+  async getAdminEmployeeNotifications(
+    token: string,
+    personId: string
+  ): Promise<{ data: EmployeeNotification[]; unread: number }> {
+    const response = await fetch(`${API_URL}/api/admin/employees/${personId}/notifications`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || result.detail || "Khong the tai thong bao nhan vien");
+    }
+    return { data: result.data ?? [], unread: result.unread ?? 0 };
+  },
+
+  async getAdminEmployeeAttendance(
+    token: string,
+    personId: string,
+    year: number,
+    month: number
+  ): Promise<{ data: EmployeeNotification[]; year: number; month: number }> {
+    const params = new URLSearchParams({ year: String(year), month: String(month) });
+    const response = await fetch(`${API_URL}/api/admin/employees/${personId}/attendance?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || result.detail || "Khong the tai lich diem danh nhan vien");
+    }
+    return { data: result.data ?? [], year: result.year, month: result.month };
   }
 };

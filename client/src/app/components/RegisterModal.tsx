@@ -4,12 +4,12 @@ import {
   X, Upload, Shield, Camera, CreditCard,
   ChevronRight, Check, AlertTriangle, Info, RefreshCw, QrCode
 } from "lucide-react";
-import { apiClient } from "../services/api";
+import { apiClient, type RegisterFaceResponse } from "../services/api";
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 interface Props {
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (result: RegisterFaceResponse) => void | Promise<void>;
 }
 
 // ─── CCCD field definitions ───────────────────────────────────────────────────
@@ -605,18 +605,20 @@ function StepInfo({
   defaultName, onSubmit, onBack, submitting, error,
 }: {
   defaultName: string;
-  onSubmit: (data: { name: string; role: string; dept: string; expiry: string }) => void;
+  onSubmit: (data: { name: string; email: string; role: string; dept: string; expiry: string }) => void;
   onBack: () => void;
   submitting: boolean;
   error: string;
 }) {
   const [name,   setName]   = useState(defaultName);
+  const [email,  setEmail]  = useState("");
   const [role,   setRole]   = useState("");
   const [dept,   setDept]   = useState("");
   const [expiry, setExpiry] = useState("");
 
   const fields = [
     { label: "Họ và tên *",                                    value: name,   setter: setName,   placeholder: "NGUYỄN VĂN A",        type: "text", required: true  },
+    { label: "Email nhân viên *",                              value: email,  setter: setEmail,  placeholder: "nhanvien@congty.com", type: "email", required: true  },
     { label: "Chức vụ",                                        value: role,   setter: setRole,   placeholder: "Kỹ sư, Quản lý...",   type: "text", required: false },
     { label: "Phòng ban",                                      value: dept,   setter: setDept,   placeholder: "Kỹ thuật, Nhân sự...",type: "text", required: false },
     { label: "Hết hạn làm việc (để trống nếu vĩnh viễn)",     value: expiry, setter: setExpiry, placeholder: "",                     type: "date", required: false },
@@ -652,13 +654,13 @@ function StepInfo({
           ← Quay lại
         </button>
         <button
-          onClick={() => onSubmit({ name, role, dept, expiry })}
-          disabled={!name.trim() || submitting}
+          onClick={() => onSubmit({ name, email, role, dept, expiry })}
+          disabled={!name.trim() || !email.trim() || submitting}
           style={{
             flex: 2, padding: "11px", borderRadius: "10px",
-            background: !name.trim() || submitting ? "rgba(255,255,255,0.04)" : "#00ff88",
-            border: "none", color: !name.trim() || submitting ? "#2d4060" : "#000",
-            fontWeight: 700, cursor: !name.trim() || submitting ? "not-allowed" : "pointer",
+            background: !name.trim() || !email.trim() || submitting ? "rgba(255,255,255,0.04)" : "#00ff88",
+            border: "none", color: !name.trim() || !email.trim() || submitting ? "#2d4060" : "#000",
+            fontWeight: 700, cursor: !name.trim() || !email.trim() || submitting ? "not-allowed" : "pointer",
             display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
           }}
         >
@@ -712,7 +714,7 @@ export function RegisterModal({ onClose, onSuccess }: Props) {
 
   const stepLabels = ["", "Thông tin CCCD", "Ảnh khuôn mặt", "Thông tin công việc", "Đang hoàn tất"];
 
-  const handleSubmit = async (info: { name: string; role: string; dept: string; expiry: string }) => {
+  const handleSubmit = async (info: { name: string; email: string; role: string; dept: string; expiry: string }) => {
     try {
       setError("");
       setSubmitting(true);
@@ -720,6 +722,7 @@ export function RegisterModal({ onClose, onSuccess }: Props) {
 
       const fd = new FormData();
       fd.append("name",       info.name);
+      fd.append("email",      info.email);
       fd.append("role",       info.role);
       fd.append("department", info.dept);
       if (info.expiry) fd.append("work_expiry_date", info.expiry);
@@ -728,8 +731,8 @@ export function RegisterModal({ onClose, onSuccess }: Props) {
       fd.append("cccd_info", JSON.stringify(cccdData));
       faceFiles.forEach((f) => fd.append("images", f));
 
-      await apiClient.registerFace(fd);
-      onSuccess();
+      const result = await apiClient.registerFace(fd);
+      await onSuccess(result);
       onClose();
     } catch (err: any) {
       const msg = err?.response?.data?.error || err?.response?.data?.detail || err?.message || "Đăng ký thất bại, vui lòng kiểm tra lại.";

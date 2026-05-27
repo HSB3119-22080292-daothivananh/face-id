@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Outlet, NavLink, useLocation, useNavigate } from "react-router";
 import {
   Activity,
+  Bell,
   Camera,
   ChevronLeft,
   ChevronRight,
@@ -27,6 +28,7 @@ const navItems = [
   { path: "/live", label: "Nhận diện trực tiếp", icon: Camera },
   { path: "/faces", label: "Người dùng", icon: Users },
   { path: "/activity", label: "Nhật ký", icon: Activity },
+  { path: "/employee", label: "Màn nhân viên", icon: Bell },
 ];
 
 // ─── CUSTOM HOOK: Real-time Clock ──────────────────────────────────────────

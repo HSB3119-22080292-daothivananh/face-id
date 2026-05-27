@@ -14,7 +14,7 @@ import {
   UserCircle,
   X,
 } from "lucide-react";
-import { apiClient, type EmployeeNotification, type EmployeeProfile } from "../services/api";
+import { apiClient, type AdminEmployeeAccount, type EmployeeNotification, type EmployeeProfile } from "../services/api";
 import { clearStoredAuth, getStoredAuth } from "./Auth";
 
 const weekDays = ["Thứ hai", "Thứ ba", "Thứ tư", "Thứ năm", "Thứ sáu", "Thứ bảy", "Chủ nhật"];
@@ -43,13 +43,16 @@ export function EmployeePortal() {
   const navigate = useNavigate();
   const auth = getStoredAuth();
   const token = auth?.token || "";
-  const profile = auth?.user as EmployeeProfile | undefined;
+  const isAdmin = auth?.role === "admin";
+  const profile = auth?.role === "employee" ? (auth.user as EmployeeProfile) : undefined;
 
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [notifications, setNotifications] = useState<EmployeeNotification[]>([]);
   const [attendance, setAttendance] = useState<EmployeeNotification[]>([]);
+  const [employees, setEmployees] = useState<AdminEmployeeAccount[]>([]);
+  const [selectedPersonId, setSelectedPersonId] = useState("");
   const [selectedCheckin, setSelectedCheckin] = useState<EmployeeNotification | null>(null);
   const [unread, setUnread] = useState(0);
   const [syncing, setSyncing] = useState(false);
@@ -66,16 +69,43 @@ export function EmployeePortal() {
   }, [attendance]);
 
   const latestNotification = notifications.find((item) => item.status === "unread") ?? notifications[0];
+  const selectedEmployee = isAdmin
+    ? employees.find((item) => item.person_id === selectedPersonId)
+    : profile;
+  const displayName = selectedEmployee?.name || (isAdmin ? "Chọn nhân viên" : "Nhân viên");
+  const displayDepartment = selectedEmployee?.department || "Chưa có phòng ban";
+  const displayRole = selectedEmployee?.role || "Chưa có chức vụ";
+
+  const loadEmployees = async () => {
+    if (!token || !isAdmin) return;
+    const list = await apiClient.getAdminEmployees(token);
+    setEmployees(list);
+    setSelectedPersonId((current) => {
+      if (current && list.some((item) => item.person_id === current)) return current;
+      return list[0]?.person_id || "";
+    });
+  };
 
   const loadData = async (quiet = false) => {
     if (!token) return;
+    if (isAdmin && !selectedPersonId) {
+      setNotifications([]);
+      setAttendance([]);
+      setUnread(0);
+      return;
+    }
     try {
       if (!quiet) setSyncing(true);
       setError("");
-      const [notificationResult, calendarResult] = await Promise.all([
-        apiClient.getEmployeeNotifications(token),
-        apiClient.getEmployeeAttendance(token, year, month),
-      ]);
+      const [notificationResult, calendarResult] = isAdmin
+        ? await Promise.all([
+            apiClient.getAdminEmployeeNotifications(token, selectedPersonId),
+            apiClient.getAdminEmployeeAttendance(token, selectedPersonId, year, month),
+          ])
+        : await Promise.all([
+            apiClient.getEmployeeNotifications(token),
+            apiClient.getEmployeeAttendance(token, year, month),
+          ]);
       setNotifications(notificationResult.data);
       setUnread(notificationResult.unread);
       setAttendance(calendarResult.data);
@@ -87,14 +117,20 @@ export function EmployeePortal() {
   };
 
   useEffect(() => {
+    loadEmployees().catch((err) => {
+      setError(err instanceof Error ? err.message : "Không thể tải danh sách nhân viên");
+    });
+  }, [token, isAdmin]);
+
+  useEffect(() => {
     loadData();
-  }, [token, year, month]);
+  }, [token, year, month, selectedPersonId, isAdmin]);
 
   useEffect(() => {
     if (!token) return;
     const timer = window.setInterval(() => loadData(true), 5000);
     return () => window.clearInterval(timer);
-  }, [token, year, month]);
+  }, [token, year, month, selectedPersonId, isAdmin]);
 
   const handleLogout = () => {
     clearStoredAuth();
@@ -102,7 +138,7 @@ export function EmployeePortal() {
   };
 
   const markAllRead = async () => {
-    if (!token || unread === 0) return;
+    if (!token || unread === 0 || isAdmin) return;
     setSyncing(true);
     try {
       await apiClient.markEmployeeNotificationsRead(token);
@@ -158,22 +194,46 @@ export function EmployeePortal() {
             <UserCircle size={22} />
           </div>
           <div>
-            <div style={{ fontSize: 20, fontWeight: 800 }}>{profile?.name || "Nhân viên"}</div>
+            <div style={{ fontSize: 20, fontWeight: 800 }}>{displayName}</div>
             <div style={{ fontSize: 13, color: "var(--app-muted)" }}>
-              {profile?.department || "Chưa có phòng ban"} · {profile?.role || "Chưa có chức vụ"}
+              {isAdmin ? "Admin đang xem màn nhân viên" : displayDepartment} · {displayRole}
             </div>
           </div>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <button onClick={markAllRead} disabled={syncing || unread === 0} style={actionButtonStyle}>
-            <Bell size={16} />
-            {unread} chưa đọc
-          </button>
+          {isAdmin && (
+            <select
+              value={selectedPersonId}
+              onChange={(event) => {
+                setSelectedPersonId(event.target.value);
+                setSelectedCheckin(null);
+              }}
+              style={{ ...selectStyle, minWidth: 220, height: 38 }}
+            >
+              {employees.map((employee) => (
+                <option key={employee.person_id} value={employee.person_id}>
+                  {employee.name} {employee.username ? `(${employee.username})` : ""}
+                </option>
+              ))}
+            </select>
+          )}
+          {!isAdmin && (
+            <button onClick={markAllRead} disabled={syncing || unread === 0} style={actionButtonStyle}>
+              <Bell size={16} />
+              {unread} chưa đọc
+            </button>
+          )}
           <button onClick={() => loadData()} disabled={syncing} style={actionButtonStyle}>
             <RefreshCw size={16} style={{ animation: syncing ? "spin 1s linear infinite" : undefined }} />
             Làm mới
           </button>
+          {isAdmin && (
+            <button onClick={() => navigate("/", { replace: true })} style={actionButtonStyle}>
+              <CalendarDays size={16} />
+              Quản lý
+            </button>
+          )}
           <button onClick={handleLogout} style={dangerButtonStyle}>
             <LogOut size={16} />
             Đăng xuất
@@ -293,7 +353,7 @@ export function EmployeePortal() {
 
             <div style={{ display: "grid", gap: 10, marginTop: 18 }}>
               <InfoRow icon={<Clock size={17} />} label="Thời gian" value={`${selectedCheckin.time} · ${selectedCheckin.date}`} />
-              <InfoRow icon={<UserCircle size={17} />} label="Nhân viên" value={profile?.name || ""} />
+              <InfoRow icon={<UserCircle size={17} />} label="Nhân viên" value={displayName} />
               <InfoRow icon={<MapPin size={17} />} label="Camera" value={selectedCheckin.camera || "Cổng Chính"} />
               <InfoRow icon={<CheckCircle2 size={17} />} label="Trạng thái" value="Đã điểm danh xong" />
               <InfoRow
