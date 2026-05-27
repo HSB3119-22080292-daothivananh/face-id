@@ -39,8 +39,30 @@ function monthCells(year: number, month: number) {
   });
 }
 
+function monthDays(year: number, month: number) {
+  const totalDays = new Date(year, month, 0).getDate();
+  return Array.from({ length: totalDays }, (_, index) => new Date(year, month - 1, index + 1));
+}
+
+function useIsMobile(maxWidth = 760) {
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.innerWidth <= maxWidth;
+  });
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth <= maxWidth);
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [maxWidth]);
+
+  return isMobile;
+}
+
 export function EmployeePortal() {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const auth = getStoredAuth();
   const token = auth?.token || "";
   const isAdmin = auth?.role === "admin";
@@ -170,6 +192,7 @@ export function EmployeePortal() {
 
   const years = Array.from({ length: 7 }, (_, index) => now.getFullYear() - 3 + index);
   const cells = monthCells(year, month);
+  const mobileDays = useMemo(() => monthDays(year, month), [year, month]);
   const checkedDays = attendanceByDay.size;
   const latestCheckinTime = latestNotification
     ? `${latestNotification.time} · ${latestNotification.date}`
@@ -179,33 +202,24 @@ export function EmployeePortal() {
     <div style={{ minHeight: "100vh", background: "var(--app-bg)", color: "var(--app-text)" }}>
       <header
         style={{
-          position: "sticky",
-          top: 0,
-          zIndex: 20,
-          background: "rgba(255,255,255,0.92)",
-          borderBottom: "1px solid var(--app-border)",
-          backdropFilter: "blur(16px)",
-          padding: "14px 20px",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: 12,
-          flexWrap: "wrap",
+          ...pageHeaderStyle,
+          padding: isMobile ? 12 : "14px 20px",
+          alignItems: isMobile ? "stretch" : "center",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
           <div style={iconBoxStyle}>
             <UserCircle size={22} />
           </div>
-          <div>
-            <div style={{ fontSize: 20, fontWeight: 800 }}>{displayName}</div>
-            <div style={{ fontSize: 13, color: "var(--app-muted)" }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: isMobile ? 17 : 20, fontWeight: 800, overflowWrap: "anywhere" }}>{displayName}</div>
+            <div style={{ fontSize: 13, color: "var(--app-muted)", overflowWrap: "anywhere" }}>
               {isAdmin ? "Admin đang xem màn nhân viên" : displayDepartment} · {displayRole}
             </div>
           </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <div style={{ ...headerActionsStyle, width: isMobile ? "100%" : undefined }}>
           {isAdmin && (
             <select
               value={selectedPersonId}
@@ -213,7 +227,7 @@ export function EmployeePortal() {
                 setSelectedPersonId(event.target.value);
                 setSelectedCheckin(null);
               }}
-              style={{ ...selectStyle, minWidth: 220, height: 38 }}
+              style={{ ...selectStyle, minWidth: isMobile ? 0 : 220, width: isMobile ? "100%" : undefined, height: 38 }}
             >
               {employees.map((employee) => (
                 <option key={employee.person_id} value={employee.person_id}>
@@ -223,29 +237,29 @@ export function EmployeePortal() {
             </select>
           )}
           {!isAdmin && (
-            <button onClick={markAllRead} disabled={syncing || unread === 0} style={actionButtonStyle}>
+            <button onClick={markAllRead} disabled={syncing || unread === 0} style={{ ...actionButtonStyle, flex: isMobile ? "1 1 100%" : undefined }}>
               <Bell size={16} />
               {unread} chưa đọc
             </button>
           )}
-          <button onClick={() => loadData()} disabled={syncing} style={actionButtonStyle}>
+          <button onClick={() => loadData()} disabled={syncing} style={{ ...actionButtonStyle, flex: isMobile ? "1 1 0" : undefined }}>
             <RefreshCw size={16} style={{ animation: syncing ? "spin 1s linear infinite" : undefined }} />
             Làm mới
           </button>
           {isAdmin && (
-            <button onClick={() => navigate("/", { replace: true })} style={actionButtonStyle}>
+            <button onClick={() => navigate("/", { replace: true })} style={{ ...actionButtonStyle, flex: isMobile ? "1 1 0" : undefined }}>
               <CalendarDays size={16} />
               Quản lý
             </button>
           )}
-          <button onClick={handleLogout} style={dangerButtonStyle}>
+          <button onClick={handleLogout} style={{ ...dangerButtonStyle, flex: isMobile ? "1 1 0" : undefined }}>
             <LogOut size={16} />
             Đăng xuất
           </button>
         </div>
       </header>
 
-      <main style={{ padding: 20, display: "grid", gap: 18, maxWidth: 1180, margin: "0 auto" }}>
+      <main style={{ padding: isMobile ? 12 : 20, display: "grid", gap: isMobile ? 12 : 18, maxWidth: 1180, margin: "0 auto" }}>
         {latestNotification && (
           <section style={successBandStyle}>
             <div style={successIconStyle}>
@@ -291,27 +305,27 @@ export function EmployeePortal() {
         </section>
 
         <section style={calendarShellStyle}>
-          <div style={calendarHeaderStyle}>
+          <div style={{ ...calendarHeaderStyle, ...(isMobile ? calendarHeaderMobileStyle : {}) }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
               <div style={calendarHeaderIconStyle}>
                 <CalendarDays size={22} />
               </div>
-              <div>
+              <div style={{ minWidth: 0 }}>
                 <div style={calendarEyebrowStyle}>Lịch điểm danh</div>
-                <div style={calendarTitleStyle}>Tháng {pad(month)} - {year}</div>
+                <div style={{ ...calendarTitleStyle, fontSize: isMobile ? 20 : 24 }}>Tháng {pad(month)} - {year}</div>
               </div>
             </div>
 
-            <div style={calendarControlsStyle}>
+            <div style={{ ...calendarControlsStyle, ...(isMobile ? calendarControlsMobileStyle : {}) }}>
               <button onClick={goPrevMonth} style={roundButtonStyle} title="Tháng trước">
                 <ChevronLeft size={20} />
               </button>
-              <select value={month} onChange={(event) => setMonth(Number(event.target.value))} style={selectStyle}>
+              <select value={month} onChange={(event) => setMonth(Number(event.target.value))} style={{ ...selectStyle, flex: isMobile ? "1 1 120px" : undefined }}>
                 {Array.from({ length: 12 }, (_, index) => index + 1).map((item) => (
                   <option key={item} value={item}>Tháng {item}</option>
                 ))}
               </select>
-              <select value={year} onChange={(event) => setYear(Number(event.target.value))} style={selectStyle}>
+              <select value={year} onChange={(event) => setYear(Number(event.target.value))} style={{ ...selectStyle, flex: isMobile ? "1 1 92px" : undefined }}>
                 {years.map((item) => (
                   <option key={item} value={item}>{item}</option>
                 ))}
@@ -322,7 +336,54 @@ export function EmployeePortal() {
             </div>
           </div>
 
-          <div style={calendarBodyScrollStyle}>
+          {isMobile ? (
+            <div style={mobileListStyle}>
+              {mobileDays.map((date) => {
+                const key = formatDateKey(date);
+                const records = attendanceByDay.get(key) || [];
+                const primaryRecord = records[0];
+                const isToday = key === formatDateKey(now);
+                const weekday = weekDays[(date.getDay() + 6) % 7];
+
+                return (
+                  <button
+                    key={key}
+                    onClick={() => primaryRecord && setSelectedCheckin(primaryRecord)}
+                    disabled={!primaryRecord}
+                    style={{
+                      ...mobileDayRowStyle,
+                      ...(primaryRecord ? mobileDayRowActiveStyle : {}),
+                      ...(isToday ? mobileDayRowTodayStyle : {}),
+                      cursor: primaryRecord ? "pointer" : "default",
+                    }}
+                  >
+                    <div style={mobileDateBoxStyle}>
+                      <div style={mobileDateNumberStyle}>{pad(date.getDate())}</div>
+                      <div style={mobileWeekdayStyle}>{weekday}</div>
+                    </div>
+                    <div style={{ minWidth: 0, flex: 1, display: "grid", gap: 6 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        {isToday && <span style={todayBadgeStyle}>Hôm nay</span>}
+                        {primaryRecord ? (
+                          <span style={mobileStatusOkStyle}>
+                            <CheckCircle2 size={13} />
+                            Đã điểm danh
+                          </span>
+                        ) : (
+                          <span style={mobileStatusEmptyStyle}>Chưa check-in</span>
+                        )}
+                      </div>
+                      <div style={mobileDayMetaStyle}>
+                        {primaryRecord ? `Check-in lúc ${primaryRecord.time}` : "Không có bản ghi trong ngày này"}
+                      </div>
+                      {records.length > 1 && <div style={moreRecordStyle}>+{records.length - 1} lần khác</div>}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div style={calendarBodyScrollStyle}>
             <div style={weekGridStyle}>
               {weekDays.map((day) => (
                 <div key={day} style={weekDayStyle}>{day}</div>
@@ -384,6 +445,7 @@ export function EmployeePortal() {
               })}
             </div>
           </div>
+          )}
         </section>
       </main>
 
@@ -431,6 +493,26 @@ function InfoRow({ icon, label, value }: { icon: ReactNode; label: string; value
     </div>
   );
 }
+
+const pageHeaderStyle: CSSProperties = {
+  position: "sticky",
+  top: 0,
+  zIndex: 20,
+  background: "rgba(255,255,255,0.94)",
+  borderBottom: "1px solid var(--app-border)",
+  backdropFilter: "blur(16px)",
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 12,
+  flexWrap: "wrap",
+};
+
+const headerActionsStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+  flexWrap: "wrap",
+};
 
 const iconBoxStyle: CSSProperties = {
   width: 44,
@@ -557,6 +639,11 @@ const calendarHeaderStyle: CSSProperties = {
   flexWrap: "wrap",
 };
 
+const calendarHeaderMobileStyle: CSSProperties = {
+  padding: 14,
+  alignItems: "stretch",
+};
+
 const calendarHeaderIconStyle: CSSProperties = {
   width: 42,
   height: 42,
@@ -589,6 +676,11 @@ const calendarControlsStyle: CSSProperties = {
   flexWrap: "wrap",
 };
 
+const calendarControlsMobileStyle: CSSProperties = {
+  width: "100%",
+  marginLeft: 0,
+};
+
 const roundButtonStyle: CSSProperties = {
   width: 36,
   height: 36,
@@ -610,6 +702,95 @@ const selectStyle: CSSProperties = {
   color: "#0f172a",
   padding: "0 12px",
   fontWeight: 700,
+};
+
+const mobileListStyle: CSSProperties = {
+  display: "grid",
+  gap: 10,
+  padding: 12,
+  background: "#f8fafc",
+};
+
+const mobileDayRowStyle: CSSProperties = {
+  width: "100%",
+  border: "1px solid var(--app-border)",
+  borderRadius: 12,
+  background: "#ffffff",
+  padding: 12,
+  display: "flex",
+  alignItems: "center",
+  gap: 12,
+  textAlign: "left",
+  color: "var(--app-text)",
+};
+
+const mobileDayRowActiveStyle: CSSProperties = {
+  borderColor: "rgba(5,150,105,0.24)",
+  background: "#f0fdf4",
+};
+
+const mobileDayRowTodayStyle: CSSProperties = {
+  borderColor: "rgba(217,119,6,0.28)",
+  background: "#fffbeb",
+};
+
+const mobileDateBoxStyle: CSSProperties = {
+  width: 64,
+  minWidth: 64,
+  height: 64,
+  borderRadius: 12,
+  display: "grid",
+  placeItems: "center",
+  alignContent: "center",
+  background: "#ffffff",
+  border: "1px solid var(--app-border)",
+};
+
+const mobileDateNumberStyle: CSSProperties = {
+  fontSize: 24,
+  fontWeight: 900,
+  lineHeight: 1,
+};
+
+const mobileWeekdayStyle: CSSProperties = {
+  marginTop: 5,
+  fontSize: 11,
+  color: "var(--app-muted)",
+  fontWeight: 800,
+};
+
+const mobileStatusOkStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  minHeight: 26,
+  padding: "0 9px",
+  borderRadius: 999,
+  background: "#ffffff",
+  color: "var(--app-success)",
+  border: "1px solid rgba(5,150,105,0.18)",
+  fontSize: 12,
+  fontWeight: 900,
+};
+
+const mobileStatusEmptyStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  minHeight: 26,
+  padding: "0 9px",
+  borderRadius: 999,
+  background: "#f8fafc",
+  color: "var(--app-muted)",
+  border: "1px dashed var(--app-border)",
+  fontSize: 12,
+  fontWeight: 800,
+};
+
+const mobileDayMetaStyle: CSSProperties = {
+  color: "var(--app-muted)",
+  fontSize: 13,
+  fontWeight: 700,
+  overflowWrap: "anywhere",
 };
 
 const calendarBodyScrollStyle: CSSProperties = {

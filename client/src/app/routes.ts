@@ -1,4 +1,4 @@
-import { createBrowserRouter } from "react-router";
+import { createHashRouter } from "react-router";
 import { Layout } from "./components/Layout";
 import { Dashboard } from "./components/Dashboard";
 import { LiveRecognition } from "./components/LiveRecognition";
@@ -7,7 +7,7 @@ import { ActivityLog } from "./components/ActivityLog";
 import { EmployeePortal } from "./components/EmployeePortal";
 import { AdminRoute, EmployeeRoute, LoginScreen, ResetPasswordScreen } from "./components/Auth";
 
-export const router = createBrowserRouter([
+export const router = createHashRouter([
   { path: "/login", Component: LoginScreen },
   { path: "/reset-password", Component: ResetPasswordScreen },
   {

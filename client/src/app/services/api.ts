@@ -160,6 +160,25 @@ export interface AdminEmployeeAccount {
   must_change_password: boolean;
 }
 
+async function readJsonResponse(response: Response, fallbackMessage: string) {
+  const text = await response.text();
+  let result: any = {};
+
+  if (text) {
+    try {
+      result = JSON.parse(text);
+    } catch {
+      throw new Error(response.ok ? "Phản hồi server không đúng định dạng JSON" : fallbackMessage);
+    }
+  }
+
+  if (!response.ok || result.success === false) {
+    throw new Error(result.error || result.detail || fallbackMessage);
+  }
+
+  return result;
+}
+
 // ─── API Client ───────────────────────────────────────────────────────────────
 export const apiClient = {
   /**
@@ -379,10 +398,7 @@ export const apiClient = {
     const response = await fetch(`${API_URL}/api/employee/notifications`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    const result = await response.json();
-    if (!response.ok || !result.success) {
-      throw new Error(result.error || result.detail || "Không thể tải thông báo");
-    }
+    const result = await readJsonResponse(response, "Không thể tải thông báo");
     return { data: result.data ?? [], unread: result.unread ?? 0 };
   },
 
@@ -395,10 +411,7 @@ export const apiClient = {
     const response = await fetch(`${API_URL}/api/employee/attendance?${params.toString()}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    const result = await response.json();
-    if (!response.ok || !result.success) {
-      throw new Error(result.error || result.detail || "Không thể tải lịch điểm danh");
-    }
+    const result = await readJsonResponse(response, "Không thể tải lịch điểm danh");
     return { data: result.data ?? [], year: result.year, month: result.month };
   },
 
@@ -411,20 +424,14 @@ export const apiClient = {
       },
       body: JSON.stringify({ notification_ids: notificationIds ?? null }),
     });
-    const result = await response.json();
-    if (!response.ok || !result.success) {
-      throw new Error(result.error || result.detail || "Không thể cập nhật thông báo");
-    }
+    await readJsonResponse(response, "Không thể cập nhật thông báo");
   },
 
   async getAdminEmployees(token: string): Promise<AdminEmployeeAccount[]> {
     const response = await fetch(`${API_URL}/api/admin/employees`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    const result = await response.json();
-    if (!response.ok || !result.success) {
-      throw new Error(result.error || result.detail || "Khong the tai danh sach nhan vien");
-    }
+    const result = await readJsonResponse(response, "Không thể tải danh sách nhân viên");
     return result.data ?? [];
   },
 
@@ -435,10 +442,7 @@ export const apiClient = {
     const response = await fetch(`${API_URL}/api/admin/employees/${personId}/notifications`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    const result = await response.json();
-    if (!response.ok || !result.success) {
-      throw new Error(result.error || result.detail || "Khong the tai thong bao nhan vien");
-    }
+    const result = await readJsonResponse(response, "Không thể tải thông báo nhân viên");
     return { data: result.data ?? [], unread: result.unread ?? 0 };
   },
 
@@ -452,10 +456,7 @@ export const apiClient = {
     const response = await fetch(`${API_URL}/api/admin/employees/${personId}/attendance?${params.toString()}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    const result = await response.json();
-    if (!response.ok || !result.success) {
-      throw new Error(result.error || result.detail || "Khong the tai lich diem danh nhan vien");
-    }
+    const result = await readJsonResponse(response, "Không thể tải lịch điểm danh nhân viên");
     return { data: result.data ?? [], year: result.year, month: result.month };
   }
 };
