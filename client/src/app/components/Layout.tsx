@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Outlet, NavLink, useLocation } from "react-router";
+import { Outlet, NavLink, useLocation, useNavigate } from "react-router";
 import {
   Activity,
   Camera,
@@ -16,8 +16,11 @@ import {
   CloudRain,
   CloudSnow,
   Clock,
+  LogOut,
+  UserCircle,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
+import { clearStoredAuth, getStoredAuth } from "./Auth";
 
 const navItems = [
   { path: "/", label: "Tổng quan", icon: LayoutDashboard, end: true },
@@ -116,8 +119,10 @@ export function Layout() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
   const currentTime = useCurrentTime();
   const weather = useWeather("Hanoi,VN");
+  const auth = getStoredAuth();
 
   const timeString = currentTime.toLocaleTimeString("vi-VN", {
     hour: "2-digit",
@@ -134,6 +139,11 @@ export function Layout() {
   useEffect(() => {
     setMobileOpen(false);
   }, [location.pathname]);
+
+  const handleLogout = () => {
+    clearStoredAuth();
+    navigate("/login", { replace: true });
+  };
 
   useEffect(() => {
     const handleResize = () => {
@@ -371,6 +381,22 @@ export function Layout() {
               justifyContent: "flex-end",
             }}
           >
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "8px 12px",
+              background: "var(--app-surface, #f8fafc)",
+              borderRadius: 12,
+              border: "1px solid var(--app-border, #e2e8f0)",
+              whiteSpace: "nowrap",
+            }}>
+              <UserCircle size={16} color="var(--app-muted, #64748b)" />
+              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--app-text, #1e293b)" }}>
+                {auth?.user.name || "Admin"}
+              </div>
+            </div>
+
             <div style={{ 
               display: "flex", 
               alignItems: "center", 
@@ -444,6 +470,24 @@ export function Layout() {
                 </div>
               </div>
             </div>
+
+            <button
+              onClick={handleLogout}
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 12,
+                border: "1px solid var(--app-border, #e2e8f0)",
+                background: "var(--app-surface, #ffffff)",
+                color: "var(--app-danger)",
+                display: "grid",
+                placeItems: "center",
+                cursor: "pointer",
+              }}
+              title="Đăng xuất"
+            >
+              <LogOut size={17} />
+            </button>
           </motion.div>
         </header>
 

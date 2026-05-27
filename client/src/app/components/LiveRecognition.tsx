@@ -7,6 +7,7 @@ import {
   RefreshCw,
   Sun,
   Moon,
+  CheckCircle2,
 } from "lucide-react";
 import { apiClient } from "../services/api";
 
@@ -15,6 +16,12 @@ type DetectionResult = {
   person?: { name: string; role: string; id?: string };
   confidence?: number;
   box?: { x: number; y: number; w: number; h: number };
+};
+
+type AttendanceNotice = {
+  name: string;
+  message: string;
+  time: string;
 };
 
 function ScanLine() {
@@ -115,6 +122,7 @@ export function LiveRecognition() {
   const [scanning, setScanning] = useState(false);
   const [lightLevel, setLightLevel] = useState<"ok" | "dim" | "dark">("ok");
   const [isMobile, setIsMobile] = useState(false);
+  const [attendanceNotice, setAttendanceNotice] = useState<AttendanceNotice | null>(null);
 
   // Check mobile on mount and resize
   useEffect(() => {
@@ -125,6 +133,12 @@ export function LiveRecognition() {
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  useEffect(() => {
+    if (!attendanceNotice) return;
+    const timeout = window.setTimeout(() => setAttendanceNotice(null), 4200);
+    return () => window.clearTimeout(timeout);
+  }, [attendanceNotice]);
 
   // ─── CƠ CHẾ CHỐNG SPAM (TRACKING & COOLDOWN) ─────────────────────────────
   const [activeDetections, setActiveDetections] = useState<DetectionResult[]>([]);
@@ -202,6 +216,11 @@ export function LiveRecognition() {
 
                 if (face.id && face.status === "success") {
                   if (!attendanceBook.current.has(face.id)) {
+                    setAttendanceNotice({
+                      name: face.name,
+                      message: face.attendance_message || "Đã điểm danh xong",
+                      time: new Date().toLocaleTimeString("vi-VN", { hour12: false }),
+                    });
                     setHistory((prev) =>
                       [{ time: new Date().toLocaleTimeString("vi-VN", { hour12: false }), result: newResult }, ...prev].slice(0, 10)
                     );
@@ -450,6 +469,42 @@ export function LiveRecognition() {
             )}
 
             <AnimatePresence>
+              {attendanceNotice && (
+                <motion.div
+                  initial={{ opacity: 0, y: 12, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 12, scale: 0.98 }}
+                  style={{
+                    position: "absolute",
+                    left: isMobile ? 10 : 16,
+                    right: isMobile ? 10 : 16,
+                    bottom: isMobile ? 10 : 16,
+                    zIndex: 28,
+                    padding: isMobile ? "10px 12px" : "12px 14px",
+                    borderRadius: 8,
+                    background: "rgba(5, 150, 105, 0.92)",
+                    border: "1px solid rgba(255, 255, 255, 0.28)",
+                    color: "#ffffff",
+                    boxShadow: "0 12px 32px rgba(5, 150, 105, 0.28)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                  }}
+                >
+                  <CheckCircle2 size={isMobile ? 18 : 22} style={{ flexShrink: 0 }} />
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: isMobile ? 14 : 15, fontWeight: 800 }}>
+                      {attendanceNotice.message}
+                    </div>
+                    <div style={{ fontSize: isMobile ? 11 : 12, opacity: 0.9, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {attendanceNotice.name} · {attendanceNotice.time}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <AnimatePresence>
               {isStreaming && lightLevel !== "ok" && (
                 <motion.div
                   initial={{ opacity: 0, y: -8 }} 
@@ -606,7 +661,7 @@ export function LiveRecognition() {
                   color: mainDetection.status === "success" ? "#00ff88" : "#ff2d55",
                   border: `1px solid ${mainDetection.status === "success" ? "rgba(0,255,136,0.3)" : "rgba(255,45,85,0.3)"}`,
                 }}>
-                  {mainDetection.status === "success" ? "✓ NHẬN DIỆN THÀNH CÔNG" : "✗ KHÔNG XÁC ĐỊNH"}
+                  {mainDetection.status === "success" ? "✓ ĐÃ ĐIỂM DANH XONG" : "✗ KHÔNG XÁC ĐỊNH"}
                 </div>
                 <div style={{ 
                   fontSize: isMobile ? "16px" : "18px", 

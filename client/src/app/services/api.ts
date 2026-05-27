@@ -8,6 +8,7 @@ export interface RecognitionFace {
   status: "success" | "unknown" | "expired"; // Đã thêm 'expired' cho đồng bộ
   confidence: number;
   bbox: { x: number; y: number; width: number; height: number };
+  attendance_message?: string;
 }
 
 export interface RecognitionResponse {
@@ -72,6 +73,54 @@ export interface MemoryStatus {
   loaded: boolean;
   ramCount: number;
   message: string;
+}
+
+export interface EmployeeProfile {
+  person_id: string;
+  name: string;
+  role: string;
+  department: string;
+  username: string;
+}
+
+export interface AdminProfile {
+  admin_id: string;
+  name: string;
+  username: string;
+}
+
+export type AuthRole = "admin" | "employee";
+
+export interface AuthSession {
+  success: boolean;
+  role: AuthRole;
+  token: string;
+  user: AdminProfile | EmployeeProfile;
+  expires_at: string;
+}
+
+export interface EmployeeNotification {
+  id: string;
+  title: string;
+  message: string;
+  status: "unread" | "read";
+  time: string;
+  date: string;
+  day_key?: string;
+  attendance_time: string;
+  created_at: string;
+  read_at: string | null;
+  camera?: string | null;
+  action?: string | null;
+  confidence?: number | null;
+  recognition_status?: string | null;
+}
+
+export interface EmployeeLoginResponse {
+  success: boolean;
+  token: string;
+  employee: EmployeeProfile;
+  expires_at: string;
 }
 
 // ─── API Client ───────────────────────────────────────────────────────────────
@@ -221,5 +270,84 @@ export const apiClient = {
     });
     if (!res.ok) throw new Error("Lỗi gọi API OCR");
     return res.json(); 
+  },
+
+  async login(identifier: string, password: string): Promise<AuthSession> {
+    const response = await fetch(`${API_URL}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier, password }),
+    });
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || result.detail || "Đăng nhập thất bại");
+    }
+    return result;
+  },
+
+  async getMe(token: string): Promise<{ role: AuthRole; user: AdminProfile | EmployeeProfile }> {
+    const response = await fetch(`${API_URL}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || result.detail || "Phiên đăng nhập đã hết hạn");
+    }
+    return { role: result.role, user: result.user };
+  },
+
+  async loginEmployee(identifier: string, password: string): Promise<EmployeeLoginResponse> {
+    const response = await fetch(`${API_URL}/api/employee/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier, password }),
+    });
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || result.detail || "Đăng nhập thất bại");
+    }
+    return result;
+  },
+
+  async getEmployeeNotifications(token: string): Promise<{ data: EmployeeNotification[]; unread: number }> {
+    const response = await fetch(`${API_URL}/api/employee/notifications`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || result.detail || "Không thể tải thông báo");
+    }
+    return { data: result.data ?? [], unread: result.unread ?? 0 };
+  },
+
+  async getEmployeeAttendance(
+    token: string,
+    year: number,
+    month: number
+  ): Promise<{ data: EmployeeNotification[]; year: number; month: number }> {
+    const params = new URLSearchParams({ year: String(year), month: String(month) });
+    const response = await fetch(`${API_URL}/api/employee/attendance?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || result.detail || "Không thể tải lịch điểm danh");
+    }
+    return { data: result.data ?? [], year: result.year, month: result.month };
+  },
+
+  async markEmployeeNotificationsRead(token: string, notificationIds?: string[]): Promise<void> {
+    const response = await fetch(`${API_URL}/api/employee/notifications/read`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ notification_ids: notificationIds ?? null }),
+    });
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || result.detail || "Không thể cập nhật thông báo");
+    }
   }
 };
