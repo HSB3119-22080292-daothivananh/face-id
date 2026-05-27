@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { useNavigate } from "react-router";
 import {
@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { apiClient, type AdminEmployeeAccount, type EmployeeNotification, type EmployeeProfile } from "../services/api";
 import { clearStoredAuth, getStoredAuth } from "./Auth";
+
+const EMPLOYEE_NOTIFICATION_POLL_MS = 60000;
 
 const weekDays = ["Thứ hai", "Thứ ba", "Thứ tư", "Thứ năm", "Thứ sáu", "Thứ bảy", "Chủ nhật"];
 
@@ -79,6 +81,8 @@ export function EmployeePortal() {
   const [unread, setUnread] = useState(0);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState("");
+  const requestSeqRef = useRef(0);
+  const latestNotificationKeyRef = useRef("");
 
   const attendanceByDay = useMemo(() => {
     const map = new Map<string, EmployeeNotification[]>();
@@ -90,7 +94,12 @@ export function EmployeePortal() {
     return map;
   }, [attendance]);
 
-  const latestNotification = notifications.find((item) => item.status === "unread") ?? notifications[0];
+  const latestNotification = useMemo(() => {
+    const combined = [...notifications, ...attendance]
+      .filter((item) => item.attendance_time || item.time || item.date)
+      .sort((a, b) => new Date(b.attendance_time || "").getTime() - new Date(a.attendance_time || "").getTime());
+    return notifications.find((item) => item.status === "unread") ?? notifications[0] ?? combined[0];
+  }, [notifications, attendance]);
   const selectedEmployee = isAdmin
     ? employees.find((item) => item.person_id === selectedPersonId)
     : profile;
@@ -108,6 +117,9 @@ export function EmployeePortal() {
     });
   };
 
+  const notificationKey = (items: EmployeeNotification[]) =>
+    items[0]?.id || items[0]?.attendance_time || `${items[0]?.date || ""}-${items[0]?.time || ""}`;
+
   const loadData = async (quiet = false) => {
     if (!token) return;
     if (isAdmin && !selectedPersonId) {
@@ -116,6 +128,7 @@ export function EmployeePortal() {
       setUnread(0);
       return;
     }
+    const requestId = ++requestSeqRef.current;
     try {
       if (!quiet) setSyncing(true);
       setError("");
@@ -128,9 +141,11 @@ export function EmployeePortal() {
             apiClient.getEmployeeNotifications(token),
             apiClient.getEmployeeAttendance(token, year, month),
           ]);
-      setNotifications(notificationResult.data);
+      if (requestId !== requestSeqRef.current) return;
+      setNotifications((current) => (quiet && notificationResult.data.length === 0 ? current : notificationResult.data));
       setUnread(notificationResult.unread);
-      setAttendance(calendarResult.data);
+      setAttendance((current) => (quiet && calendarResult.data.length === 0 ? current : calendarResult.data));
+      latestNotificationKeyRef.current = notificationKey(notificationResult.data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Không thể tải dữ liệu điểm danh");
     } finally {
@@ -148,11 +163,34 @@ export function EmployeePortal() {
     loadData();
   }, [token, year, month, selectedPersonId, isAdmin]);
 
+  const loadNotificationsOnly = async () => {
+    if (!token || isAdmin) return;
+    if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+
+    const notificationResult = await apiClient.getEmployeeNotifications(token);
+    if (notificationResult.data.length > 0) {
+      const nextKey = notificationKey(notificationResult.data);
+      const hasNewCheckin = Boolean(nextKey && nextKey !== latestNotificationKeyRef.current);
+      latestNotificationKeyRef.current = nextKey;
+      setNotifications(notificationResult.data);
+
+      if (hasNewCheckin) {
+        const calendarResult = await apiClient.getEmployeeAttendance(token, year, month);
+        setAttendance((current) => (calendarResult.data.length === 0 ? current : calendarResult.data));
+      }
+    }
+    setUnread(notificationResult.unread);
+  };
+
   useEffect(() => {
-    if (!token) return;
-    const timer = window.setInterval(() => loadData(true), 5000);
+    if (!token || isAdmin) return;
+    const timer = window.setInterval(() => {
+      loadNotificationsOnly().catch((err) => {
+        setError(err instanceof Error ? err.message : "Khong the tai thong bao diem danh");
+      });
+    }, EMPLOYEE_NOTIFICATION_POLL_MS);
     return () => window.clearInterval(timer);
-  }, [token, year, month, selectedPersonId, isAdmin]);
+  }, [token, year, month, isAdmin]);
 
   const handleLogout = () => {
     clearStoredAuth();
