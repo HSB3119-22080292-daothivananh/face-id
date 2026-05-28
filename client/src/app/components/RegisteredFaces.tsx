@@ -1141,7 +1141,7 @@ export function RegisteredFaces() {
               setShowRegisterModal(false);
               await loadPersons();
               const accountMessage = result.account
-                ? `Đăng ký thành công. Username: ${result.account.username} - MK tạm: ${result.account.temporary_password}${result.account.email_sent ? " - đã gửi email" : " - chưa gửi được email, kiểm tra SMTP trên backend"}`
+                ? `Đăng ký thành công. Username: ${result.account.username} - MK tạm: ${result.account.temporary_password}${result.account.email_sent ? " - đã gửi email" : " - chưa gửi được email, kiểm tra cấu hình email backend"}`
                 : "Đăng ký người dùng thành công";
               setToast({ message: accountMessage, type: "success" });
             }}

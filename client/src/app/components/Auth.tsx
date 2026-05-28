@@ -390,6 +390,7 @@ export function ResetPasswordScreen() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const token = params.get("token") || "";
+  const [currentPassword, setCurrentPassword] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -403,6 +404,10 @@ export function ResetPasswordScreen() {
       setError("Link đổi mật khẩu không hợp lệ.");
       return;
     }
+    if (!currentPassword.trim()) {
+      setError("Vui lòng nhập mật khẩu cũ.");
+      return;
+    }
     if (password.length < 6) {
       setError("Mật khẩu mới cần tối thiểu 6 ký tự.");
       return;
@@ -414,7 +419,7 @@ export function ResetPasswordScreen() {
 
     setLoading(true);
     try {
-      await apiClient.resetPassword(token, password);
+      await apiClient.resetPassword(token, currentPassword, password);
       setDone(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Không thể đổi mật khẩu");
@@ -475,6 +480,19 @@ export function ResetPasswordScreen() {
           </button>
         ) : (
           <>
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontSize: 13, color: "var(--app-muted)" }}>Mật khẩu cũ</span>
+              <div style={{ position: "relative" }}>
+                <KeyRound size={17} style={{ position: "absolute", left: 12, top: 12, color: "var(--app-muted)" }} />
+                <input
+                  value={currentPassword}
+                  onChange={(event) => setCurrentPassword(event.target.value)}
+                  type="password"
+                  autoComplete="current-password"
+                  style={inputStyle}
+                />
+              </div>
+            </label>
             <label style={{ display: "grid", gap: 6 }}>
               <span style={{ fontSize: 13, color: "var(--app-muted)" }}>Mật khẩu mới</span>
               <div style={{ position: "relative" }}>

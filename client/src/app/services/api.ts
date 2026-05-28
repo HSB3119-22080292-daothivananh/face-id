@@ -369,11 +369,11 @@ export const apiClient = {
     return { role: result.role, user: result.user };
   },
 
-  async resetPassword(token: string, password: string): Promise<void> {
+  async resetPassword(token: string, currentPassword: string, password: string): Promise<void> {
     const response = await fetch(`${API_URL}/api/auth/reset-password`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token, password }),
+      body: JSON.stringify({ token, current_password: currentPassword, password }),
     });
     const result = await response.json();
     if (!response.ok || !result.success) {
