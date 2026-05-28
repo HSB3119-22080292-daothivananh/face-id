@@ -25,3 +25,7 @@ uploads/
 # OS
 .DS_Store
 Thumbs.db
+
+controllers/templates/*.jpg
+# Env file (rất quan trọng - chứa key, db password)
+.env

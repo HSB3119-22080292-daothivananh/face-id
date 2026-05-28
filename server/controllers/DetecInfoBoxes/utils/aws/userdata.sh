@@ -7,7 +7,7 @@
 cd home/ubuntu
 if [ ! -d yolor ]; then
   echo "Running first-time script." # install dependencies, download COCO, pull Docker
-  git clone -b paper http:s//github.com/WongKinYiu/yolor && sudo chmod -R 777 yolor
+  git clone -b paper https://github.com/WongKinYiu/yolor && sudo chmod -R 777 yolor
   cd yolor
   bash data/scripts/get_coco.sh && echo "Data done." &
   sudo docker pull nvcr.io/nvidia/pytorch:21.08-py3 && echo "Docker done." &

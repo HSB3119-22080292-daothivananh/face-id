@@ -264,7 +264,7 @@
 import cv2, numpy as np, io, os, threading, logging, urllib.request
 from dataclasses import dataclass, field
 from typing import Optional
-from PIL import Image
+from PIL import Image, ImageOps
 
 logger = logging.getLogger(__name__)
 
@@ -379,35 +379,80 @@ class FaceAiService:
         _download_model(YUNET_URL, YUNET_PATH, "YuNet")
         _download_model(SFACE_URL, SFACE_PATH, "SFace")
         logger.info("[AI] Khởi tạo YuNet + SFace...")
-        self._detector   = cv2.FaceDetectorYN.create(YUNET_PATH, "", (320,240), score_threshold=0.6, nms_threshold=0.3, top_k=5)
+        self._detector   = cv2.FaceDetectorYN.create(YUNET_PATH, "", (320,240), score_threshold=0.45, nms_threshold=0.3, top_k=5)
         self._recognizer = cv2.FaceRecognizerSF.create(SFACE_PATH, "")
         logger.info("[AI]  Sẵn sàng")
 
     @staticmethod
     def _decode(file_bytes: bytes):
         try:
+            pil = Image.open(io.BytesIO(file_bytes))
+            pil = ImageOps.exif_transpose(pil).convert("RGB")
+            return cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
+        except Exception: pass
+        try:
             arr = np.frombuffer(file_bytes, np.uint8)
             img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
             if img is not None: return img
-        except Exception: pass
-        try:
-            pil = Image.open(io.BytesIO(file_bytes)).convert("RGB")
-            return cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR)
         except Exception as e:
             logger.error(f"[AI] Không đọc ảnh: {e}"); return None
+
+    @staticmethod
+    def _image_variants(img):
+        variants = [("original", img)]
+        h, w = img.shape[:2]
+        max_side = max(h, w)
+        min_side = min(h, w)
+
+        if max_side > 1600:
+            scale = 1600 / max_side
+            variants.append(("downscale", cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)))
+        if min_side < 480:
+            scale = 480 / min_side
+            variants.append(("upscale", cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_CUBIC)))
+
+        try:
+            lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+            l, a, b = cv2.split(lab)
+            l = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(l)
+            variants.append(("contrast", cv2.cvtColor(cv2.merge((l, a, b)), cv2.COLOR_LAB2BGR)))
+        except Exception:
+            pass
+
+        variants.extend([
+            ("rotate90", cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)),
+            ("rotate270", cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE)),
+            ("rotate180", cv2.rotate(img, cv2.ROTATE_180)),
+        ])
+        return variants
+
+    def _detect_raw(self, img):
+        h, w = img.shape[:2]
+        self._detector.setInputSize((w, h))
+        _, faces_raw = self._detector.detect(img)
+        if faces_raw is None or len(faces_raw) == 0:
+            return None
+        return sorted(faces_raw, key=lambda fd: float(fd[-1]), reverse=True)
 
     def extract_faces(self, file_bytes: bytes) -> list[dict]:
         img = self._decode(file_bytes)
         if img is None: return []
-        h, w = img.shape[:2]
-        self._detector.setInputSize((w, h))
-        _, faces_raw = self._detector.detect(img)
-        if faces_raw is None or len(faces_raw) == 0: return []
+        selected_img = img
+        faces_raw = None
+        used_variant = "original"
+        for variant_name, candidate in self._image_variants(img):
+            faces_raw = self._detect_raw(candidate)
+            if faces_raw is not None:
+                selected_img = candidate
+                used_variant = variant_name
+                break
+        if faces_raw is None: return []
+        h, w = selected_img.shape[:2]
         results = []
         for fd in faces_raw:
             x,y,fw,fh = [int(v) for v in fd[:4]]
             x=max(0,x); y=max(0,y); fw=min(fw,w-x); fh=min(fh,h-y)
-            aligned  = self._recognizer.alignCrop(img, fd)
+            aligned  = self._recognizer.alignCrop(selected_img, fd)
             feature  = self._recognizer.feature(aligned)
             results.append({
                 "box": {"x":x,"y":y,"width":fw,"height":fh},

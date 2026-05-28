@@ -24,7 +24,7 @@ get_dictionary = Detect(opt)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 if not GEMINI_API_KEY:
     # Fallback cứng (không khuyến khích, chỉ để debug)
-    GEMINI_API_KEY = "AIzaSyBwZJ2OhnX6pVk2YWOPekJeym9p-SxCZb4"
+    GEMINI_API_KEY = "AIzaSyCoTWP9PNUGYhkpXp8hjP-0QdGHv3Kqtq8"
     print("[WARN] Dùng API key mặc định – hãy set biến môi trường GEMINI_API_KEY")
 
 genai.configure(api_key=GEMINI_API_KEY)

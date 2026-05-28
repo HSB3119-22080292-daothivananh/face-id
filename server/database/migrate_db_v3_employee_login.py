@@ -1,92 +1,39 @@
-import mysql.connector
-import os
 import hashlib
+import os
+import re
 import secrets
-from dotenv import load_dotenv
+import sys
+import uuid
+from pathlib import Path
 
-load_dotenv()
+sys.path.append(str(Path(__file__).resolve().parent))
+from database import get_db_connection
 
 DEFAULT_ADMIN_USERNAME = "admin"
 DEFAULT_ADMIN_PASSWORD = "123456"
 DEFAULT_ADMIN_NAME = "Administrator"
-DB_TIME_ZONE = os.getenv("DB_TIME_ZONE", "+07:00")
 
-db_config = {
-    "host": os.getenv("DB_HOST", "gateway01.ap-northeast-1.prod.aws.tidbcloud.com"),
-    "port": int(os.getenv("DB_PORT", 4000)),
-    "user": os.getenv("DB_USER", "2baveu7Xa8Rif24.root"),
-    "password": os.getenv("DB_PASSWORD", "Ao2uet4hvdyZEmAx"),
-    "database": os.getenv("DB_NAME", "test"),
-    "pool_name": "mypool",
-    "pool_size": 5,
-    "ssl_disabled": False
-}
-# Tao pool ket noi
-try:
-    connection_pool = mysql.connector.pooling.MySQLConnectionPool(**db_config)
-    print("[OK] Da khoi tao Pool ket noi MySQL thanh cong!")
-except Exception as e:
-    print(f"[LOI] Loi khoi tao Pool MySQL: {e}")
 
-def get_db_connection():
-    conn = connection_pool.get_connection()
-    cursor = None
-    try:
-        cursor = conn.cursor()
-        cursor.execute("SET time_zone = %s", (DB_TIME_ZONE,))
-    except Exception as e:
-        print(f"[WARN] Khong the set time_zone MySQL {DB_TIME_ZONE}: {e}")
-    finally:
-        if cursor:
-            cursor.close()
-    return conn
+def default_employee_password(username: str) -> str:
+    digits = re.sub(r"\D", "", username or "")
+    if len(digits) >= 6:
+        return digits[-6:]
+    return digits or (username or "123456")[-6:] or "123456"
 
-def _hash_password(password: str, salt: str) -> str:
+
+def hash_password(password: str, salt: str) -> str:
     return hashlib.sha256(f"{salt}:{password}".encode("utf-8")).hexdigest()
 
-def _ensure_default_admin(cursor):
-    admin_username = DEFAULT_ADMIN_USERNAME
-    admin_password = DEFAULT_ADMIN_PASSWORD
-    admin_name = DEFAULT_ADMIN_NAME
 
-    salt = secrets.token_hex(16)
-    password_hash = _hash_password(admin_password, salt)
-    cursor.execute("SELECT id FROM admin_accounts WHERE username=%s LIMIT 1", (admin_username,))
-    existing = cursor.fetchone()
-    if existing:
-        cursor.execute(
-            """
-            UPDATE admin_accounts
-            SET password_hash=%s, password_salt=%s, display_name=%s, status='active'
-            WHERE username=%s
-            """,
-            (password_hash, salt, admin_name, admin_username),
-        )
-        return
-
-    cursor.execute(
-        """
-        INSERT INTO admin_accounts
-          (id, username, password_hash, password_salt, display_name, status)
-        VALUES (%s, %s, %s, %s, %s, 'active')
-        """,
-        (
-            secrets.token_hex(16),
-            admin_username,
-            password_hash,
-            salt,
-            admin_name,
-        ),
-    )
-
-def _column_exists(cursor, table_name: str, column_name: str) -> bool:
+def column_exists(cursor, table_name: str, column_name: str) -> bool:
     cursor.execute(f"SHOW COLUMNS FROM {table_name} LIKE %s", (column_name,))
     return cursor.fetchone() is not None
 
-def _index_exists(cursor, table_name: str, index_name: str) -> bool:
+
+def index_exists(cursor, table_name: str, index_name: str) -> bool:
     cursor.execute(
         """
-        SELECT COUNT(1)
+        SELECT COUNT(1) AS total
         FROM information_schema.statistics
         WHERE table_schema = DATABASE()
           AND table_name = %s
@@ -95,9 +42,10 @@ def _index_exists(cursor, table_name: str, index_name: str) -> bool:
         (table_name, index_name),
     )
     row = cursor.fetchone()
-    return bool(row and row[0])
+    return bool(row and (row["total"] if isinstance(row, dict) else row[0]))
 
-def _ensure_employee_account_columns(cursor):
+
+def ensure_employee_columns(cursor) -> None:
     additions = [
         ("email", "ALTER TABLE employee_accounts ADD COLUMN email VARCHAR(255) NULL AFTER username"),
         ("password_reset_token", "ALTER TABLE employee_accounts ADD COLUMN password_reset_token VARCHAR(128) NULL AFTER password_salt"),
@@ -105,7 +53,7 @@ def _ensure_employee_account_columns(cursor):
         ("must_change_password", "ALTER TABLE employee_accounts ADD COLUMN must_change_password TINYINT(1) NOT NULL DEFAULT 1 AFTER password_reset_expires_at"),
     ]
     for column_name, statement in additions:
-        if not _column_exists(cursor, "employee_accounts", column_name):
+        if not column_exists(cursor, "employee_accounts", column_name):
             cursor.execute(statement)
 
     indexes = [
@@ -113,10 +61,11 @@ def _ensure_employee_account_columns(cursor):
         ("idx_employee_reset_token", "CREATE INDEX idx_employee_reset_token ON employee_accounts (password_reset_token)"),
     ]
     for index_name, statement in indexes:
-        if not _index_exists(cursor, "employee_accounts", index_name):
+        if not index_exists(cursor, "employee_accounts", index_name):
             cursor.execute(statement)
 
-def _ensure_recognition_log_columns(cursor):
+
+def ensure_recognition_log_columns(cursor) -> None:
     additions = [
         ("status", "ALTER TABLE recognition_logs ADD COLUMN status ENUM('success', 'unknown', 'error') DEFAULT 'unknown' AFTER person_id"),
         ("confidence", "ALTER TABLE recognition_logs ADD COLUMN confidence DECIMAL(5, 2) NULL AFTER status"),
@@ -125,7 +74,7 @@ def _ensure_recognition_log_columns(cursor):
         ("created_at", "ALTER TABLE recognition_logs ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP AFTER action"),
     ]
     for column_name, statement in additions:
-        if not _column_exists(cursor, "recognition_logs", column_name):
+        if not column_exists(cursor, "recognition_logs", column_name):
             cursor.execute(statement)
 
     indexes = [
@@ -133,10 +82,11 @@ def _ensure_recognition_log_columns(cursor):
         ("idx_recognition_created", "CREATE INDEX idx_recognition_created ON recognition_logs (created_at)"),
     ]
     for index_name, statement in indexes:
-        if not _index_exists(cursor, "recognition_logs", index_name):
+        if not index_exists(cursor, "recognition_logs", index_name):
             cursor.execute(statement)
 
-def _ensure_attendance_notification_columns(cursor):
+
+def ensure_attendance_notification_columns(cursor) -> None:
     additions = [
         ("recognition_log_id", "ALTER TABLE attendance_notifications ADD COLUMN recognition_log_id VARCHAR(36) NULL AFTER person_id"),
         ("title", "ALTER TABLE attendance_notifications ADD COLUMN title VARCHAR(255) NULL AFTER recognition_log_id"),
@@ -147,7 +97,7 @@ def _ensure_attendance_notification_columns(cursor):
         ("created_at", "ALTER TABLE attendance_notifications ADD COLUMN created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP AFTER read_at"),
     ]
     for column_name, statement in additions:
-        if not _column_exists(cursor, "attendance_notifications", column_name):
+        if not column_exists(cursor, "attendance_notifications", column_name):
             cursor.execute(statement)
 
     cursor.execute(
@@ -168,10 +118,11 @@ def _ensure_attendance_notification_columns(cursor):
         ("idx_notification_person_status_time", "CREATE INDEX idx_notification_person_status_time ON attendance_notifications (person_id, status, attendance_time)"),
     ]
     for index_name, statement in indexes:
-        if not _index_exists(cursor, "attendance_notifications", index_name):
+        if not index_exists(cursor, "attendance_notifications", index_name):
             cursor.execute(statement)
 
-def _ensure_performance_indexes(cursor):
+
+def ensure_performance_indexes(cursor) -> None:
     indexes = [
         ("persons", "idx_person_status_name", "CREATE INDEX idx_person_status_name ON persons (status, name)"),
         ("persons", "idx_person_status_registered", "CREATE INDEX idx_person_status_registered ON persons (status, registered_at)"),
@@ -179,72 +130,15 @@ def _ensure_performance_indexes(cursor):
         ("citizen_ids", "idx_citizen_person_id_number", "CREATE INDEX idx_citizen_person_id_number ON citizen_ids (person_id, id_number)"),
     ]
     for table_name, index_name, statement in indexes:
-        if not _index_exists(cursor, table_name, index_name):
+        if not index_exists(cursor, table_name, index_name):
             cursor.execute(statement)
 
-def init_database():
-    """Tu dong tao Schema theo chuan MySQL ban cung cap"""
-    
-    tables = [
-        """
-        CREATE TABLE IF NOT EXISTS persons (
-            id VARCHAR(36) PRIMARY KEY COMMENT 'UUID identifier',
-            name VARCHAR(255) NOT NULL COMMENT 'Person name',
-            role VARCHAR(100) COMMENT 'Job role',
-            department VARCHAR(100) COMMENT 'Department',
-            work_expiry_date DATE NULL COMMENT 'Ngay het han lam viec',
-            status ENUM('active', 'inactive') DEFAULT 'active' COMMENT 'Active status',
-            img_url LONGTEXT COMMENT 'Profile image URL',
-            img_path VARCHAR(255) DEFAULT '' COMMENT 'Duong dan file anh avatar',
-            registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT 'Registration date',
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Last update',
-            
-            KEY idx_name (name),
-            KEY idx_status (status),  
-            KEY idx_registered_at (registered_at),
-            KEY idx_work_expiry (work_expiry_date),
-            KEY idx_status_expiry (status, work_expiry_date)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-        """,
-        
-        """
-        CREATE TABLE IF NOT EXISTS citizen_ids (
-            id VARCHAR(36) PRIMARY KEY,
-            person_id VARCHAR(36) NOT NULL,
-            front_img_path VARCHAR(255),
-            back_img_path VARCHAR(255),
-            front_img_base64 LONGTEXT COMMENT 'Base64 of front CCCD',
-            back_img_base64 LONGTEXT COMMENT 'Base64 of back CCCD',
-            id_number VARCHAR(20),
-            full_name VARCHAR(255),
-            dob VARCHAR(20),
-            gender VARCHAR(10),
-            nationality VARCHAR(50) DEFAULT 'Viet Nam',
-            hometown VARCHAR(500),
-            address VARCHAR(500),
-            expiry_date VARCHAR(20),
-            issue_date VARCHAR(20),
-            special_features TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            FOREIGN KEY (person_id) REFERENCES persons(id) ON DELETE CASCADE,
-            KEY idx_citizen_person (person_id),
-            KEY idx_citizen_id_number (id_number)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-        """,
-        
-        """
-        CREATE TABLE IF NOT EXISTS face_embeddings (
-            id VARCHAR(36) PRIMARY KEY,
-            person_id VARCHAR(36) NOT NULL,
-            embedding_vector LONGTEXT NOT NULL,
-            img_base64 LONGTEXT COMMENT 'Base64 of this face angle',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (person_id) REFERENCES persons(id) ON DELETE CASCADE,
-            KEY idx_person_id (person_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-        """,
 
+def migrate():
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    tables = [
         """
         CREATE TABLE IF NOT EXISTS employee_accounts (
             id VARCHAR(36) PRIMARY KEY,
@@ -267,7 +161,6 @@ def init_database():
             KEY idx_employee_status (status)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         """,
-
         """
         CREATE TABLE IF NOT EXISTS employee_sessions (
             id VARCHAR(36) PRIMARY KEY,
@@ -280,7 +173,6 @@ def init_database():
             KEY idx_session_expires (expires_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         """,
-
         """
         CREATE TABLE IF NOT EXISTS admin_accounts (
             id VARCHAR(36) PRIMARY KEY,
@@ -296,7 +188,6 @@ def init_database():
             KEY idx_admin_status (status)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         """,
-
         """
         CREATE TABLE IF NOT EXISTS admin_sessions (
             id VARCHAR(36) PRIMARY KEY,
@@ -309,21 +200,6 @@ def init_database():
             KEY idx_admin_session_expires (expires_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         """,
-        
-        """
-        CREATE TABLE IF NOT EXISTS recognition_logs (
-            id VARCHAR(36) PRIMARY KEY,
-            person_id VARCHAR(36),
-            status ENUM('success', 'unknown', 'error') DEFAULT 'unknown',
-            confidence DECIMAL(5, 2),
-            camera VARCHAR(100),
-            action ENUM('Vao', 'Ra', 'Tu choi', 'Loi') DEFAULT 'Vao',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (person_id) REFERENCES persons(id) ON DELETE SET NULL,
-            KEY idx_person_id (person_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-        """,
-
         """
         CREATE TABLE IF NOT EXISTS attendance_notifications (
             id VARCHAR(36) PRIMARY KEY,
@@ -340,25 +216,83 @@ def init_database():
             KEY idx_notification_person_status (person_id, status),
             KEY idx_notification_attendance_time (attendance_time)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-        """
+        """,
     ]
 
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        for query in tables:
-            cursor.execute(query)
-        _ensure_employee_account_columns(cursor)
-        _ensure_recognition_log_columns(cursor)
-        _ensure_attendance_notification_columns(cursor)
-        _ensure_performance_indexes(cursor)
-        _ensure_default_admin(cursor)
-        conn.commit()
-        print("[OK] Da kiem tra va khoi tao cau truc CSDL thanh cong tren Railway!")
-    except mysql.connector.Error as err:
-        print(f"[LOI] Loi SQL khi khoi tao bang: {err}")
-    except Exception as e:
-        print(f"[LOI] Loi he thong khi khoi tao bang: {e}")
-    finally:
-        if 'cursor' in locals(): cursor.close()
-        if 'conn' in locals() and conn.is_connected(): conn.close()
+    for query in tables:
+        cursor.execute(query)
+    ensure_employee_columns(cursor)
+    ensure_recognition_log_columns(cursor)
+    ensure_attendance_notification_columns(cursor)
+    ensure_performance_indexes(cursor)
+
+    admin_username = DEFAULT_ADMIN_USERNAME
+    admin_password = DEFAULT_ADMIN_PASSWORD
+    admin_name = DEFAULT_ADMIN_NAME
+    admin_salt = secrets.token_hex(16)
+    admin_hash = hash_password(admin_password, admin_salt)
+    cursor.execute("SELECT id FROM admin_accounts WHERE username=%s LIMIT 1", (admin_username,))
+    if cursor.fetchone():
+        cursor.execute(
+            """
+            UPDATE admin_accounts
+            SET password_hash=%s, password_salt=%s, display_name=%s, status='active'
+            WHERE username=%s
+            """,
+            (admin_hash, admin_salt, admin_name, admin_username),
+        )
+    else:
+        cursor.execute(
+            """
+            INSERT INTO admin_accounts
+              (id, username, password_hash, password_salt, display_name, status)
+            VALUES (%s, %s, %s, %s, %s, 'active')
+            """,
+            (
+                str(uuid.uuid4()),
+                admin_username,
+                admin_hash,
+                admin_salt,
+                admin_name,
+            ),
+        )
+
+    cursor.execute(
+        """
+        SELECT p.id AS person_id, c.id_number
+        FROM persons p
+        JOIN citizen_ids c ON c.person_id = p.id
+        LEFT JOIN employee_accounts a ON a.person_id = p.id
+        WHERE p.status = 'active'
+          AND c.id_number IS NOT NULL
+          AND c.id_number <> ''
+          AND a.id IS NULL
+        """
+    )
+
+    for row in cursor.fetchall():
+        salt = secrets.token_hex(16)
+        username = row["id_number"].strip()
+        cursor.execute(
+            """
+            INSERT INTO employee_accounts
+              (id, person_id, username, password_hash, password_salt, status)
+            VALUES (%s, %s, %s, %s, %s, 'active')
+            """,
+            (
+                str(uuid.uuid4()),
+                row["person_id"],
+                username,
+                hash_password(default_employee_password(username), salt),
+                salt,
+            ),
+        )
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+    print("Migration complete: employee login and attendance notifications")
+
+
+if __name__ == "__main__":
+    migrate()
