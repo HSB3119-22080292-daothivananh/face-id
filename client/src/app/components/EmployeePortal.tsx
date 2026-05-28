@@ -81,6 +81,8 @@ export function EmployeePortal() {
   const [unread, setUnread] = useState(0);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState("");
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [toastNotice, setToastNotice] = useState<EmployeeNotification | null>(null);
   const requestSeqRef = useRef(0);
   const latestNotificationKeyRef = useRef("");
 
@@ -175,6 +177,7 @@ export function EmployeePortal() {
       setNotifications(notificationResult.data);
 
       if (hasNewCheckin) {
+        setToastNotice(notificationResult.data[0]);
         const calendarResult = await apiClient.getEmployeeAttendance(token, year, month);
         setAttendance((current) => (calendarResult.data.length === 0 ? current : calendarResult.data));
       }
@@ -210,6 +213,20 @@ export function EmployeePortal() {
     }
   };
 
+  const handleNotificationBellClick = async () => {
+    if (isAdmin) return;
+    setNotificationsOpen((value) => !value);
+    if (!token || unread === 0) return;
+
+    try {
+      await apiClient.markEmployeeNotificationsRead(token);
+      setUnread(0);
+      setNotifications((items) => items.map((item) => ({ ...item, status: "read" })));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Khong the cap nhat thong bao");
+    }
+  };
+
   const goPrevMonth = () => {
     if (month === 1) {
       setYear((value) => value - 1);
@@ -235,6 +252,12 @@ export function EmployeePortal() {
   const latestCheckinTime = latestNotification
     ? `${latestNotification.time} · ${latestNotification.date}`
     : "Chưa có dữ liệu";
+
+  useEffect(() => {
+    if (!toastNotice) return;
+    const timer = window.setTimeout(() => setToastNotice(null), 3000);
+    return () => window.clearTimeout(timer);
+  }, [toastNotice]);
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--app-bg)", color: "var(--app-text)" }}>
@@ -275,10 +298,67 @@ export function EmployeePortal() {
             </select>
           )}
           {!isAdmin && (
-            <button onClick={markAllRead} disabled={syncing || unread === 0} style={{ ...actionButtonStyle, flex: isMobile ? "1 1 100%" : undefined }}>
-              <Bell size={16} />
-              {unread} chưa đọc
-            </button>
+            <div style={{ position: "relative", flex: isMobile ? "1 1 100%" : undefined }}>
+              <button
+                onClick={handleNotificationBellClick}
+                disabled={syncing}
+                style={{ ...actionButtonStyle, width: isMobile ? "100%" : undefined }}
+                title="Thông báo điểm danh"
+              >
+                <Bell size={16} />
+                Thông báo
+                {unread > 0 && <span style={notificationCountStyle}>{unread}</span>}
+              </button>
+
+              {notificationsOpen && (
+                <section style={{ ...notificationPanelStyle, width: isMobile ? "min(92vw, 360px)" : 360 }}>
+                  <div style={notificationPanelHeaderStyle}>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 900 }}>Thông báo điểm danh</div>
+                      <div style={{ fontSize: 12, color: "var(--app-muted)", marginTop: 2 }}>{notifications.length} bản ghi gần đây</div>
+                    </div>
+                    <button onClick={() => setNotificationsOpen(false)} style={smallIconButtonStyle} title="Đóng">
+                      <X size={16} />
+                    </button>
+                  </div>
+
+                  <div style={notificationListStyle}>
+                    {notifications.length === 0 ? (
+                      <div style={emptyNotificationStyle}>Chưa có thông báo điểm danh.</div>
+                    ) : (
+                      notifications.slice(0, 8).map((item) => (
+                        <button
+                          key={item.id || `${item.date}-${item.time}`}
+                          onClick={() => {
+                            setSelectedCheckin(item);
+                            setNotificationsOpen(false);
+                          }}
+                          style={notificationItemStyle}
+                        >
+                          <div style={notificationIconStyle}>
+                            <CheckCircle2 size={15} />
+                          </div>
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div style={{ fontSize: 13, fontWeight: 900, color: "var(--app-text)", overflowWrap: "anywhere" }}>
+                              {item.title}
+                            </div>
+                            <div style={{ marginTop: 4, fontSize: 12, color: "var(--app-muted)" }}>
+                              {item.time} · {item.date}
+                            </div>
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+
+                  {notifications.length > 0 && (
+                    <button onClick={markAllRead} disabled={syncing || unread === 0} style={markReadButtonStyle}>
+                      Đánh dấu tất cả đã đọc
+                    </button>
+                  )}
+                </section>
+              )}
+            </div>
           )}
           <button onClick={() => loadData()} disabled={syncing} style={{ ...actionButtonStyle, flex: isMobile ? "1 1 0" : undefined }}>
             <RefreshCw size={16} style={{ animation: syncing ? "spin 1s linear infinite" : undefined }} />
@@ -487,6 +567,20 @@ export function EmployeePortal() {
         </section>
       </main>
 
+      {toastNotice && (
+        <div style={toastNoticeStyle}>
+          <div style={toastIconStyle}>
+            <CheckCircle2 size={18} />
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 900 }}>{toastNotice.title || "Đã điểm danh xong"}</div>
+            <div style={{ marginTop: 3, fontSize: 12, color: "rgba(255,255,255,0.86)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {toastNotice.time} · {toastNotice.date}
+            </div>
+          </div>
+        </div>
+      )}
+
       {selectedCheckin && (
         <div style={modalOverlayStyle} onClick={() => setSelectedCheckin(null)}>
           <section style={modalStyle} onClick={(event) => event.stopPropagation()}>
@@ -574,6 +668,131 @@ const actionButtonStyle: CSSProperties = {
   gap: 7,
   cursor: "pointer",
   fontWeight: 700,
+};
+
+const notificationCountStyle: CSSProperties = {
+  minWidth: 20,
+  height: 20,
+  padding: "0 6px",
+  borderRadius: 999,
+  background: "var(--app-danger)",
+  color: "#ffffff",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: 11,
+  fontWeight: 900,
+};
+
+const notificationPanelStyle: CSSProperties = {
+  position: "absolute",
+  top: 46,
+  right: 0,
+  zIndex: 60,
+  borderRadius: 10,
+  background: "var(--app-surface)",
+  border: "1px solid var(--app-border)",
+  boxShadow: "var(--app-shadow-xl)",
+  overflow: "hidden",
+};
+
+const notificationPanelHeaderStyle: CSSProperties = {
+  padding: "12px 12px 10px",
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "space-between",
+  gap: 12,
+  borderBottom: "1px solid var(--app-border)",
+};
+
+const smallIconButtonStyle: CSSProperties = {
+  width: 30,
+  height: 30,
+  borderRadius: 8,
+  border: "1px solid var(--app-border)",
+  background: "var(--app-bg-subtle)",
+  color: "var(--app-text)",
+  display: "grid",
+  placeItems: "center",
+  cursor: "pointer",
+};
+
+const notificationListStyle: CSSProperties = {
+  maxHeight: 320,
+  overflowY: "auto",
+  padding: 8,
+  display: "grid",
+  gap: 6,
+};
+
+const notificationItemStyle: CSSProperties = {
+  width: "100%",
+  border: "1px solid transparent",
+  borderRadius: 8,
+  background: "transparent",
+  padding: 9,
+  display: "flex",
+  alignItems: "flex-start",
+  gap: 9,
+  textAlign: "left",
+  cursor: "pointer",
+};
+
+const notificationIconStyle: CSSProperties = {
+  width: 28,
+  height: 28,
+  minWidth: 28,
+  borderRadius: 8,
+  display: "grid",
+  placeItems: "center",
+  background: "var(--app-success-bg)",
+  color: "var(--app-success)",
+  border: "1px solid var(--app-success-border)",
+};
+
+const emptyNotificationStyle: CSSProperties = {
+  padding: "22px 12px",
+  textAlign: "center",
+  color: "var(--app-muted)",
+  fontSize: 13,
+};
+
+const markReadButtonStyle: CSSProperties = {
+  width: "100%",
+  minHeight: 38,
+  border: "none",
+  borderTop: "1px solid var(--app-border)",
+  background: "var(--app-bg-subtle)",
+  color: "var(--app-accent)",
+  fontWeight: 800,
+  cursor: "pointer",
+};
+
+const toastNoticeStyle: CSSProperties = {
+  position: "fixed",
+  top: 18,
+  right: 18,
+  zIndex: 80,
+  width: "min(360px, calc(100vw - 32px))",
+  padding: "12px 14px",
+  borderRadius: 10,
+  background: "rgba(5, 150, 105, 0.96)",
+  border: "1px solid rgba(255,255,255,0.28)",
+  color: "#ffffff",
+  boxShadow: "0 16px 36px rgba(5, 150, 105, 0.28)",
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+};
+
+const toastIconStyle: CSSProperties = {
+  width: 32,
+  height: 32,
+  minWidth: 32,
+  borderRadius: 8,
+  display: "grid",
+  placeItems: "center",
+  background: "rgba(255,255,255,0.16)",
 };
 
 const dangerButtonStyle: CSSProperties = {

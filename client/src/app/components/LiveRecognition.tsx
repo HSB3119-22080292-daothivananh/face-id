@@ -136,7 +136,7 @@ export function LiveRecognition() {
 
   useEffect(() => {
     if (!attendanceNotice) return;
-    const timeout = window.setTimeout(() => setAttendanceNotice(null), 4200);
+    const timeout = window.setTimeout(() => setAttendanceNotice(null), 3000);
     return () => window.clearTimeout(timeout);
   }, [attendanceNotice]);
 
@@ -471,15 +471,15 @@ export function LiveRecognition() {
             <AnimatePresence>
               {attendanceNotice && (
                 <motion.div
-                  initial={{ opacity: 0, y: 12, scale: 0.98 }}
+                  initial={{ opacity: 0, y: -12, scale: 0.98 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 12, scale: 0.98 }}
+                  exit={{ opacity: 0, y: -12, scale: 0.98 }}
                   style={{
-                    position: "absolute",
-                    left: isMobile ? 10 : 16,
-                    right: isMobile ? 10 : 16,
-                    bottom: isMobile ? 10 : 16,
-                    zIndex: 28,
+                    position: "fixed",
+                    top: isMobile ? 10 : 18,
+                    right: isMobile ? 10 : 18,
+                    zIndex: 80,
+                    width: isMobile ? "calc(100vw - 20px)" : 360,
                     padding: isMobile ? "10px 12px" : "12px 14px",
                     borderRadius: 8,
                     background: "rgba(5, 150, 105, 0.92)",
