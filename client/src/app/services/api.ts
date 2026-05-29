@@ -1,11 +1,12 @@
-const API_URL =
-  ((import.meta as any).env.VITE_API_URL as string) || "https://vananhcs-face-id.hf.space"; // Đảm bảo có giá trị mặc định
+const API_URL = (
+  ((import.meta as any).env.VITE_API_URL as string) || "https://vananhcs-face-id.hf.space"
+).replace(/\/+$/, "");
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface RecognitionFace {
   id: string | null;
   name: string;
-  status: "success" | "unknown" | "expired"; // Đã thêm 'expired' cho đồng bộ
+  status: "success" | "unknown" | "expired";
   confidence: number;
   bbox: { x: number; y: number; width: number; height: number };
   attendance_message?: string;

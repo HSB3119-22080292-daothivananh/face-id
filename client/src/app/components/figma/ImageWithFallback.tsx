@@ -4,8 +4,9 @@
 
 import { useState } from "react";
 
-const API_URL =
-  ((import.meta as any).env.VITE_API_URL as string) || "http://localhost:3001";
+const API_URL = (
+  ((import.meta as any).env.VITE_API_URL as string) || "https://vananhcs-face-id.hf.space"
+).replace(/\/+$/, "");
 
 function resolveUrl(src: string | undefined | null): string {
   if (!src) return "";
