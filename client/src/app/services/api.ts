@@ -180,6 +180,8 @@ async function readJsonResponse(response: Response, fallbackMessage: string) {
   return result;
 }
 
+let personDetailsWithImagesCache: Person[] | null = null;
+
 // ─── API Client ───────────────────────────────────────────────────────────────
 export const apiClient = {
   /**
@@ -213,6 +215,7 @@ export const apiClient = {
     if (!response.ok || !result.success) {
       throw new Error(result.error || "Registration failed");
     }
+    personDetailsWithImagesCache = null;
     return result;
   },
 
@@ -224,27 +227,23 @@ export const apiClient = {
     const result = await readJsonResponse(response, "Fetch persons failed");
     return (result.data ?? []).map((person: Person) => ({
       ...person,
-      img_url: null,
-      img: null,
       cccd_front_img: null,
       cccd_back_img: null,
     }));
   },
 
   async getPersonDetail(personId: string): Promise<Person> {
-    const response = await fetch(`${API_URL}/api/face/persons/${personId}`);
-    if (response.status === 404 || response.status === 405) {
-      const fallbackResponse = await fetch(`${API_URL}/api/face/persons?include_images=true`);
-      const fallbackResult = await readJsonResponse(fallbackResponse, "Khong the tai chi tiet nguoi dung");
-      const person = (fallbackResult.data ?? []).find((item: Person) => item.id === personId);
-      if (!person) {
-        throw new Error("Khong tim thay nguoi dung");
-      }
-      return person;
+    if (!personDetailsWithImagesCache) {
+      const response = await fetch(`${API_URL}/api/face/persons?include_images=true`);
+      const result = await readJsonResponse(response, "Khong the tai chi tiet nguoi dung");
+      personDetailsWithImagesCache = result.data ?? [];
     }
 
-    const result = await readJsonResponse(response, "Khong the tai chi tiet nguoi dung");
-    return result.data;
+    const person = personDetailsWithImagesCache.find((item) => item.id === personId);
+    if (!person) {
+      throw new Error("Khong tim thay nguoi dung");
+    }
+    return person;
   },
 
   /**
@@ -264,6 +263,7 @@ export const apiClient = {
     if (!response.ok || !result.success) {
       throw new Error(result.error || "Update failed");
     }
+    personDetailsWithImagesCache = null;
     return result;
   },
 
@@ -276,6 +276,7 @@ export const apiClient = {
       method: "DELETE",
     });
     if (!response.ok) throw new Error("Delete failed");
+    personDetailsWithImagesCache = null;
   },
 
   /**
