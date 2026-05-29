@@ -181,6 +181,7 @@ async function readJsonResponse(response: Response, fallbackMessage: string) {
 }
 
 let personDetailsWithImagesCache: Person[] | null = null;
+const personDetailCache = new Map<string, Person>();
 let personDetailsWithImagesRequest: Promise<Person[]> | null = null;
 
 // ─── API Client ───────────────────────────────────────────────────────────────
@@ -217,6 +218,7 @@ export const apiClient = {
       throw new Error(result.error || "Registration failed");
     }
     personDetailsWithImagesCache = null;
+    personDetailCache.clear();
     personDetailsWithImagesRequest = null;
     return result;
   },
@@ -244,6 +246,7 @@ export const apiClient = {
         .then((response) => readJsonResponse(response, "Khong the tai chi tiet nguoi dung"))
         .then((result) => {
           personDetailsWithImagesCache = result.data ?? [];
+          personDetailsWithImagesCache.forEach((person) => personDetailCache.set(person.id, person));
           return personDetailsWithImagesCache;
         })
         .finally(() => {
@@ -255,11 +258,20 @@ export const apiClient = {
   },
 
   async getPersonDetail(personId: string): Promise<Person> {
-    const personsWithImages = await this.getPersonsWithImages();
-    const person = personsWithImages.find((item) => item.id === personId);
+    const cached = personDetailCache.get(personId);
+    if (cached) {
+      return cached;
+    }
+
+    const params = new URLSearchParams({ include_images: "true", person_id: personId });
+    const response = await fetch(`${API_URL}/api/face/persons?${params.toString()}`);
+    const result = await readJsonResponse(response, "Khong the tai chi tiet nguoi dung");
+    const rows: Person[] = result.data ?? [];
+    const person = rows.find((item) => item.id === personId) ?? rows[0];
     if (!person) {
       throw new Error("Khong tim thay nguoi dung");
     }
+    personDetailCache.set(person.id, person);
     return person;
   },
 
@@ -281,6 +293,7 @@ export const apiClient = {
       throw new Error(result.error || "Update failed");
     }
     personDetailsWithImagesCache = null;
+    personDetailCache.clear();
     personDetailsWithImagesRequest = null;
     return result;
   },
@@ -295,6 +308,7 @@ export const apiClient = {
     });
     if (!response.ok) throw new Error("Delete failed");
     personDetailsWithImagesCache = null;
+    personDetailCache.clear();
     personDetailsWithImagesRequest = null;
   },
 
