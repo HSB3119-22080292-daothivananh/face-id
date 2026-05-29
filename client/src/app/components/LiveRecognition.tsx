@@ -24,6 +24,57 @@ type AttendanceNotice = {
   time: string;
 };
 
+const MAX_CAPTURE_SIDE = 960;
+
+function getCaptureSize(video: HTMLVideoElement) {
+  const sourceWidth = video.videoWidth || 720;
+  const sourceHeight = video.videoHeight || 540;
+  const longestSide = Math.max(sourceWidth, sourceHeight);
+
+  if (longestSide <= MAX_CAPTURE_SIDE) {
+    return { width: sourceWidth, height: sourceHeight };
+  }
+
+  const scale = MAX_CAPTURE_SIDE / longestSide;
+  return {
+    width: Math.round(sourceWidth * scale),
+    height: Math.round(sourceHeight * scale),
+  };
+}
+
+function clampPercent(value: number) {
+  return Math.max(0, Math.min(100, value));
+}
+
+function mapBoxToDisplayedVideo(
+  video: HTMLVideoElement,
+  rawBox: { x: number; y: number; width: number; height: number },
+  imageWidth: number,
+  imageHeight: number
+) {
+  const rect = video.getBoundingClientRect();
+  const elementWidth = rect.width || imageWidth;
+  const elementHeight = rect.height || imageHeight;
+  const scale = Math.max(elementWidth / imageWidth, elementHeight / imageHeight);
+  const renderedWidth = imageWidth * scale;
+  const renderedHeight = imageHeight * scale;
+  const offsetX = (elementWidth - renderedWidth) / 2;
+  const offsetY = (elementHeight - renderedHeight) / 2;
+
+  const widthPercent = (rawBox.width * scale / elementWidth) * 100;
+  const heightPercent = (rawBox.height * scale / elementHeight) * 100;
+  const xPercent = ((rawBox.x * scale + offsetX) / elementWidth) * 100;
+  const yPercent = ((rawBox.y * scale + offsetY) / elementHeight) * 100;
+  const mirroredX = 100 - (xPercent + widthPercent);
+
+  return {
+    x: clampPercent(mirroredX),
+    y: clampPercent(yPercent),
+    w: clampPercent(widthPercent),
+    h: clampPercent(heightPercent),
+  };
+}
+
 function ScanLine() {
   return (
     <motion.div
@@ -150,8 +201,9 @@ export function LiveRecognition() {
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    const captureWidth = 1280;
-    const captureHeight = 720;
+    if (video.readyState < 2 || !video.videoWidth || !video.videoHeight) return;
+
+    const { width: captureWidth, height: captureHeight } = getCaptureSize(video);
     
     canvas.width = captureWidth;
     canvas.height = captureHeight;
@@ -199,17 +251,11 @@ export function LiveRecognition() {
 
               res.data.faces.forEach((face: any) => {
                 const rawBox = face.bbox;
-                const boxWidthPercent  = (rawBox.width  / captureWidth)  * 100;
-                const boxHeightPercent = (rawBox.height / captureHeight) * 100;
-                const xPercent         = (rawBox.x      / captureWidth)  * 100;
-                const yPercent         = (rawBox.y      / captureHeight) * 100;
-                const mirroredX        = 100 - (xPercent + boxWidthPercent);
-
                 const newResult: DetectionResult = {
                   status: face.status,
                   person: face.status !== "unknown" ? { name: face.name, role: face.role, id: face.id } : undefined,
                   confidence: face.confidence,
-                  box: { x: mirroredX, y: yPercent, w: boxWidthPercent, h: boxHeightPercent },
+                  box: mapBoxToDisplayedVideo(video, rawBox, captureWidth, captureHeight),
                 };
 
                 currentFaces.push(newResult);
@@ -260,7 +306,7 @@ export function LiveRecognition() {
       if (!isRunning || !isStreaming) return;
       await captureAndRecognize();
       if (isRunning) {
-        timeoutId = setTimeout(loop, 400);
+        timeoutId = setTimeout(loop, isMobile ? 700 : 400);
       }
     };
 
@@ -270,7 +316,7 @@ export function LiveRecognition() {
       isRunning = false;
       clearTimeout(timeoutId);
     };
-  }, [isStreaming]);
+  }, [isStreaming, isMobile]);
 
   // ─── Reset Loop ───────────────────────────────────────────────────────────
   useEffect(() => {
