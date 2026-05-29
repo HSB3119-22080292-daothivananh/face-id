@@ -578,6 +578,22 @@ export function RegisteredFaces() {
         cachedPersons = merged;
         return merged;
       });
+      window.setTimeout(() => {
+        apiClient
+          .getPersonsWithImages()
+          .then((details) => {
+            const detailsById = new Map(details.map((person) => [person.id, person]));
+            loadedDetailIds.current = new Set(details.map((person) => person.id));
+            setPersons((current) => {
+              const merged = current.map((person) => ({ ...person, ...(detailsById.get(person.id) ?? {}) }));
+              cachedPersons = merged;
+              return merged;
+            });
+          })
+          .catch(() => {
+            // Anh chi tiet se duoc tai lai khi nguoi dung chon ho so neu preload that bai.
+          });
+      }, 250);
     } catch (err) {
       setToast({
         message: err instanceof Error ? err.message : "Không thể tải dữ liệu người dùng",
