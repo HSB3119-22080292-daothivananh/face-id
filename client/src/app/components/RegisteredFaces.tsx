@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
   CheckCircle2,
@@ -240,6 +240,8 @@ function Toast({
     </motion.div>
   );
 }
+
+let cachedPersons: Person[] | null = null;
 
 function ConfirmModal({
   person,
@@ -533,8 +535,8 @@ function EditModal({
 }
 
 export function RegisteredFaces() {
-  const [persons, setPersons] = useState<Person[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [persons, setPersons] = useState<Person[]>(() => cachedPersons ?? []);
+  const [loading, setLoading] = useState(() => !cachedPersons);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive" | "expired">("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -544,16 +546,38 @@ export function RegisteredFaces() {
   const [deleting, setDeleting] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [showCCCDInfo, setShowCCCDInfo] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState("");
+  const loadedDetailIds = useRef<Set<string>>(new Set());
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 50;
 
-  const loadPersons = async () => {
+  const loadPersons = async (showInitialLoader = false) => {
     try {
-      setLoading(true);
+      if (showInitialLoader || persons.length === 0) {
+        setLoading(true);
+      }
       const data = await apiClient.getPersons();
-      setPersons(data);
+      setPersons((current) => {
+        const merged = data.map((person) => {
+          const existing = current.find((item) => item.id === person.id);
+          if (!existing) {
+            return person;
+          }
+
+          return {
+            ...person,
+            img_url: existing.img_url || person.img_url,
+            img: existing.img || person.img,
+            cccd_front_img: existing.cccd_front_img || person.cccd_front_img,
+            cccd_back_img: existing.cccd_back_img || person.cccd_back_img,
+          };
+        });
+        cachedPersons = merged;
+        return merged;
+      });
     } catch (err) {
       setToast({
         message: err instanceof Error ? err.message : "Không thể tải dữ liệu người dùng",
@@ -565,7 +589,7 @@ export function RegisteredFaces() {
   };
 
   useEffect(() => {
-    loadPersons();
+    loadPersons(!cachedPersons);
   }, []);
 
   const filteredPersons = useMemo(() => {
@@ -612,6 +636,45 @@ export function RegisteredFaces() {
   }, [paginatedPersons, selectedId]);
 
   const selectedPerson = persons.find((person) => person.id === selectedId) ?? null;
+
+  useEffect(() => {
+    if (!selectedId || loadedDetailIds.current.has(selectedId)) {
+      return;
+    }
+
+    let cancelled = false;
+    setDetailLoading(true);
+    setDetailError("");
+
+    apiClient
+      .getPersonDetail(selectedId)
+      .then((detail) => {
+        if (cancelled) {
+          return;
+        }
+
+        loadedDetailIds.current.add(selectedId);
+        setPersons((current) => {
+          const merged = current.map((person) => (person.id === selectedId ? { ...person, ...detail } : person));
+          cachedPersons = merged;
+          return merged;
+        });
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setDetailError(err instanceof Error ? err.message : "Khong the tai chi tiet nguoi dung");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setDetailLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedId]);
 
   const summary = {
     total: persons.length,
@@ -1022,6 +1085,25 @@ export function RegisteredFaces() {
                 </div>
               </div>
             </section>
+
+            {(detailLoading || detailError) && (
+              <div
+                style={{
+                  borderRadius: 16,
+                  padding: "10px 14px",
+                  background: detailError ? "rgba(251,113,133,0.08)" : "var(--app-bg-subtle)",
+                  border: `1px solid ${detailError ? "rgba(251,113,133,0.18)" : "var(--app-border)"}`,
+                  color: detailError ? "var(--app-danger)" : "var(--app-muted)",
+                  fontSize: 13,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                {detailLoading && <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />}
+                {detailError || "Dang tai anh va chi tiet CCCD..."}
+              </div>
+            )}
 
             <FieldGrid
               title="Hồ sơ cơ bản"

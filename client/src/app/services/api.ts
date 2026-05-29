@@ -219,9 +219,20 @@ export const apiClient = {
    * 3. Lấy danh sách đã đăng ký
    */
   async getPersons(): Promise<Person[]> {
-    const response = await fetch(`${API_URL}/api/face/persons`);
-    if (!response.ok) throw new Error("Fetch persons failed");
-    const result = await response.json();
+    const response = await fetch(`${API_URL}/api/face/persons?include_images=false`);
+    const result = await readJsonResponse(response, "Fetch persons failed");
+    return (result.data ?? []).map((person: Person) => ({
+      ...person,
+      img_url: null,
+      img: null,
+      cccd_front_img: null,
+      cccd_back_img: null,
+    }));
+  },
+
+  async getPersonDetail(personId: string): Promise<Person> {
+    const response = await fetch(`${API_URL}/api/face/persons/${personId}`);
+    const result = await readJsonResponse(response, "Khong the tai chi tiet nguoi dung");
     return result.data;
   },
 
