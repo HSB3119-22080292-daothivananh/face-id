@@ -233,6 +233,16 @@ export const apiClient = {
 
   async getPersonDetail(personId: string): Promise<Person> {
     const response = await fetch(`${API_URL}/api/face/persons/${personId}`);
+    if (response.status === 404 || response.status === 405) {
+      const fallbackResponse = await fetch(`${API_URL}/api/face/persons?include_images=true`);
+      const fallbackResult = await readJsonResponse(fallbackResponse, "Khong the tai chi tiet nguoi dung");
+      const person = (fallbackResult.data ?? []).find((item: Person) => item.id === personId);
+      if (!person) {
+        throw new Error("Khong tim thay nguoi dung");
+      }
+      return person;
+    }
+
     const result = await readJsonResponse(response, "Khong the tai chi tiet nguoi dung");
     return result.data;
   },
